@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>Face Word Roulette</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <video id="webcam" autoplay playsinline muted></video>
+    <canvas id="overlay-canvas"></canvas>
+    
+    <!-- Loading overlay -->
+    <div id="loading-overlay" style="
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      opacity: 0.95;
+    ">
+      <div style="text-align: center; color: white;">
+        <div style="font-size: 2rem; margin-bottom: 20px;">🎲</div>
+        <div>Loading Face Detection...</div>
+        <div style="font-size: 0.8rem; margin-top: 15px; opacity: 0.7;">
+          Please allow camera access
+        </div>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div id="bottomBar">
+      <div class="controls-container">
+        <div class="recorder-container">
+          <div class="progress-container">
+            <svg width="100%" height="100%" viewBox="0 0 36 36">
+              <circle class="progress-track" cx="18" cy="18" r="16" />
+              <circle class="progress-bar" cx="18" cy="18" r="16" />
+              <circle class="loading-circle" cx="18" cy="18" r="16" />
+            </svg>
+          </div>
+          <button id="recorder-button" type="button" aria-label="Record"></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Flash effect -->
+    <div class="flash-element"></div>
+
+    <!-- Preview container -->
+    <div id="preview-container" class="fade-container">
+      <video id="preview-video" playsinline muted controls autoplay loop></video>
+      <img id="preview-image" />
+      <div class="preview-controls">
+        <button id="preview-close" type="button">✕</button>
+        <button id="preview-share" type="button">Share</button>
+        <button id="preview-download" type="button">↓</button>
+      </div>
+    </div>
+
+    <!-- Word display -->
+    <div id="word-display"></div>
+
+    <!-- Footer -->
+    <footer id="kaseya-footer">
+      <img src="kaseya-footer.svg" alt="Kaseya DattoCon" />
+    </footer>
+  </div>
+  
+  <script type="module" src="main.js"></script>
+</body>
+</html>
