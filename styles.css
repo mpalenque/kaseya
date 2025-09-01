@@ -512,6 +512,7 @@ body {
   filter: drop-shadow(0 4px 12px rgba(138, 43, 226, 0.4));
   /* Ajuste específico para Safari */
   transform: translateY(0);
+  display: block;
 }
 
 /* Mobile optimizations */
@@ -605,7 +606,7 @@ body {
     width: 100vw !important;
     min-width: 100vw;
     height: auto;
-    object-fit: contain;
+  object-fit: contain;
   clip-path: inset(0);
   }
 }
@@ -624,7 +625,7 @@ body {
     max-height: 120px;
     width: 100vw !important;
     min-width: 100vw;
-    object-fit: contain;
+  object-fit: contain;
   clip-path: inset(0);
   }
 }
@@ -645,7 +646,7 @@ body {
     width: 100vw !important;
     min-width: 100vw !important;
     max-width: none !important;
-    object-fit: contain !important;
+  object-fit: contain !important;
     display: block !important;
     height: auto !important;
   }
@@ -668,7 +669,7 @@ body {
     width: 100vw !important;
     min-width: 100vw !important;
     max-width: none !important;
-    object-fit: cover !important;
+  object-fit: contain !important; /* Avoid cropping on Safari iPhone 12/13/14 */
     display: block !important;
     height: auto !important;
     min-height: 60px !important;
@@ -691,7 +692,7 @@ body {
     width: 100vw !important;
     min-width: 100vw !important;
     max-width: none !important;
-    object-fit: cover !important;
+  object-fit: contain !important; /* Avoid cropping on larger iPhones */
     display: block !important;
     height: auto !important;
   }
@@ -716,8 +717,8 @@ body {
     width: 100vw !important;
     min-width: 100vw !important;
     max-width: none !important;
-    object-fit: cover !important;
-    object-position: center bottom !important;
+  object-fit: contain !important; /* Prevent top being cut in Safari */
+  object-position: center bottom !important;
     display: block !important;
     height: auto !important;
     min-height: 70px !important;
