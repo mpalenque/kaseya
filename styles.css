@@ -719,8 +719,8 @@ body {
     margin: 0 !important;
     padding: 0 !important;
     padding-bottom: env(safe-area-inset-bottom, 5px) !important;
-  min-height: 160px !important;
-    height: clamp(175px, 25vh, 265px) !important;
+  min-height: 184px !important;
+    height: clamp(201px, 29vh, 305px) !important;
   z-index: 18 !important;
   }
   
