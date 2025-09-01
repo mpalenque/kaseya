@@ -494,13 +494,15 @@ body {
 /* Footer */
 #kaseya-footer {
   position: fixed;
-  bottom: -10px;
+  bottom: 0;
   left: 0;
   width: 100vw; /* Ancho completo de la pantalla */
   height: auto;
   z-index: 5;
   opacity: 0.85;
   pointer-events: none;
+  /* Fix para Safari en iPhone */
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 #kaseya-footer img {
@@ -508,6 +510,8 @@ body {
   height: auto;
   object-fit: contain;
   filter: drop-shadow(0 4px 12px rgba(138, 43, 226, 0.4));
+  /* Ajuste específico para Safari */
+  transform: translateY(0);
 }
 
 /* Mobile optimizations */
@@ -578,6 +582,37 @@ body {
   
   .control-btn:hover,
   .preview-controls button:hover {
+    transform: none;
+  }
+}
+
+/* Specific fix for Safari on iOS */
+@supports (-webkit-touch-callout: none) {
+  #kaseya-footer {
+    /* Safari específico en iOS */
+    bottom: 0;
+    padding-bottom: 0;
+  }
+}
+
+/* Additional fix for iOS viewport issues */
+@media screen and (max-device-width: 480px) {
+  #kaseya-footer {
+    bottom: 0;
+    min-height: 80px;
+  }
+  
+  #kaseya-footer img {
+    max-height: 120px;
+    width: 100%;
+  }
+}
+
+/* Extra fix for iPhone Safari viewport */
+@media only screen and (-webkit-min-device-pixel-ratio: 2) and (max-device-width: 480px) {
+  #kaseya-footer {
+    position: fixed;
+    bottom: 0;
     transform: none;
   }
 }
