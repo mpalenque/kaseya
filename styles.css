@@ -78,6 +78,36 @@ body {
   margin: 0 auto;
 }
 
+/* Particles toggle button */
+#particles-toggle {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  border: 3px solid rgba(255,255,255,0.7);
+  background: rgba(255,255,255,0.1);
+  color: white;
+  font-size: 20px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 3;
+}
+
+#particles-toggle:hover {
+  background: rgba(255,255,255,0.2);
+  border-color: #fff;
+  transform: scale(1.1);
+}
+
+#particles-toggle.active {
+  background: rgba(255,215,0,0.8);
+  border-color: #ffd700;
+  box-shadow: 0 0 20px rgba(255,215,0,0.5);
+}
+
 .control-btn {
   background: rgba(255,255,255,0.9);
   border: none;
@@ -290,7 +320,27 @@ body {
   box-shadow: 0 6px 20px rgba(220, 53, 69, 0.5) !important;
 }
 
-/* Word display */
+/* Particles system */
+.particle {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 15;
+  transition: opacity 0.3s ease;
+  will-change: transform, width, height, opacity;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+}
+
+/* Remove old size classes as we're handling sizes dynamically */
+
+/* Word display - hidden in particles mode */
+.particles-mode #word-display {
+  display: none !important;
+}
+
+.particles-mode .word-text {
+  display: none !important;
+}
 #word-display {
   position: fixed;
   top: 0;

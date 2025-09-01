@@ -18,6 +18,7 @@ const previewClose = document.getElementById('preview-close');
 const previewShare = document.getElementById('preview-share');
 const previewDownload = document.getElementById('preview-download');
 const wordDisplay = document.getElementById('word-display');
+const particlesToggle = document.getElementById('particles-toggle');
 
 // State variables
 let faceDetector;
@@ -29,6 +30,13 @@ let progressInterval, recordRAF = 0;
 let currentFile = null;
 let animationId;
 let permanentWordElement = null;
+
+// Particles system state
+let particlesMode = false;
+let particles = [];
+let particleAnimationId = null;
+let lastFacePosition = { x: 0.5, y: 0.5 }; // Normalized face position
+let faceMovementIntensity = 0; // Track how much the face is moving
 
 // Word pool for the roulette
 const words = [
@@ -157,7 +165,7 @@ function createPermanentWordElement() {
 }
 
 function updateWordPosition() {
-  if (!permanentWordElement) return;
+  if (!permanentWordElement || particlesMode) return;
 
   if (currentFaces.length > 0 && webcamEl.videoWidth && webcamEl.videoHeight) {
     const face = currentFaces[0];
@@ -224,6 +232,11 @@ function drawOverlay() {
   // Clear canvas
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   
+  // Skip drawing if in particles mode
+  if (particlesMode) {
+    return;
+  }
+  
   // Update word position and draw rings for detected faces
   if (currentFaces.length > 0) {
   // Update word position based on current face
@@ -241,6 +254,9 @@ function drawWord(x, y) {
 }
 
 function setupEventListeners() {
+  // Particles toggle button
+  particlesToggle.addEventListener('click', toggleParticlesMode);
+  
   // Recorder button (hace ruleta Y graba automáticamente)
   recorderButton.addEventListener('pointerdown', startPress);
   recorderButton.addEventListener('pointerup', endPress);
@@ -288,7 +304,7 @@ function showError(message) {
 
 // Word roulette functionality
 async function startWordRoulette(shouldRecord = false) {
-  if (isSpinning || !permanentWordElement) return;
+  if (isSpinning || !permanentWordElement) return; // Removido particlesMode de aquí
   
   isSpinning = true;
   
@@ -354,7 +370,7 @@ function startPress() {
   recorderContainer.classList.add('active');
   pressTimer = setTimeout(() => {
     pressTimer = null;
-    startWordRoulette(true); // Siempre hace ruleta con grabación
+    handleRecordAction(); // Nueva función que maneja ambos modos
   }, 350); // long press threshold
 }
 
@@ -365,8 +381,19 @@ function endPress() {
     clearTimeout(pressTimer);
     pressTimer = null;
     if (!isRecording && !isSpinning) {
-      startWordRoulette(true); // Ruleta con grabación en short press también
+      handleRecordAction(); // Nueva función que maneja ambos modos
     }
+  }
+}
+
+// Nueva función que maneja la grabación en ambos modos
+function handleRecordAction() {
+  if (particlesMode) {
+    // En modo partículas, solo graba sin ruleta
+    beginVideoRecording();
+  } else {
+    // En modo normal, hace ruleta con grabación
+    startWordRoulette(true);
   }
 }
 
@@ -471,6 +498,33 @@ async function captureHTMLElements(ctx, canvasWidth, canvasHeight) {
   const scaleX = canvasWidth / window.innerWidth;
   const scaleY = canvasHeight / window.innerHeight;
   
+  // Draw particles if in particles mode
+  if (particlesMode && particles.length > 0) {
+    particles.forEach(particleData => {
+      const particle = particleData.element;
+      const rect = particle.getBoundingClientRect();
+      
+      const x = rect.left * scaleX;
+      const y = rect.top * scaleY;
+      const width = rect.width * scaleX;
+      const height = rect.height * scaleY;
+      
+      // Get computed styles
+      const styles = window.getComputedStyle(particle);
+      const backgroundColor = styles.backgroundColor;
+      const opacity = styles.opacity;
+      
+      // Draw particle
+      ctx.save();
+      ctx.globalAlpha = parseFloat(opacity);
+      ctx.fillStyle = backgroundColor;
+      ctx.beginPath();
+      ctx.ellipse(x + width/2, y + height/2, width/2, height/2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    });
+  }
+  
   // Draw rings
   const ringsContainer = document.querySelector('.face-rings');
   if (ringsContainer && ringsContainer.style.display !== 'none') {
@@ -498,8 +552,8 @@ async function captureHTMLElements(ctx, canvasWidth, canvasHeight) {
     });
   }
   
-  // Draw text
-  if (permanentWordElement && permanentWordElement.style.opacity !== '0') {
+  // Draw text (only if not in particles mode)
+  if (!particlesMode && permanentWordElement && permanentWordElement.style.opacity !== '0') {
     const textRect = permanentWordElement.getBoundingClientRect();
     const textX = (textRect.left + textRect.width/2) * scaleX;
     const textY = (textRect.top + textRect.height/2) * scaleY;
@@ -662,6 +716,257 @@ async function tryShareOrDownload(file, filename, forceDownload = false) {
     }
   } else {
     download();
+  }
+}
+
+// Particles system functions
+function toggleParticlesMode() {
+  particlesMode = !particlesMode;
+  
+  if (particlesMode) {
+    // Enable particles mode
+    particlesToggle.classList.add('active');
+    document.body.classList.add('particles-mode');
+    createParticles();
+    startParticlesAnimation();
+  } else {
+    // Disable particles mode
+    particlesToggle.classList.remove('active');
+    document.body.classList.remove('particles-mode');
+    clearParticles();
+    stopParticlesAnimation();
+  }
+}
+
+function createParticles() {
+  // Colors from Figma particles group
+  const figmaColors = [
+    '#00FFFF', // Cian brillante
+    '#C77DFF', // Morado claro
+    '#3D348B', // Azul oscuro/morado
+    '#7209B7'  // Morado medio
+  ];
+  
+  const particleCount = 25;
+  
+  for (let i = 0; i < particleCount; i++) {
+    const particle = document.createElement('div');
+    particle.className = 'particle';
+    
+    // Create particle data object with much more varied sizes
+    const particleData = {
+      element: particle,
+      x: Math.random() * window.innerWidth,
+      y: Math.random() * window.innerHeight,
+      vx: (Math.random() - 0.5) * 0.8, // Slower, more gentle movement
+      vy: (Math.random() - 0.5) * 0.8,
+      baseSize: 15 + Math.random() * 80, // Much larger and more varied sizes (15-95px)
+      currentSize: 15 + Math.random() * 80,
+      targetSize: 15 + Math.random() * 80,
+      inertia: 0.96 + Math.random() * 0.03, // Much higher inertia for slower movement (0.96-0.99)
+      autonomousMovement: {
+        amplitude: 30 + Math.random() * 50, // Larger floating movement
+        frequency: 0.0005 + Math.random() * 0.001, // Much slower frequency
+        phaseX: Math.random() * Math.PI * 2,
+        phaseY: Math.random() * Math.PI * 2
+      },
+      faceInfluence: 0.00002 + Math.random() * 0.00008, // Much weaker influence
+      repulsionRadius: 100 + Math.random() * 150,
+      colorIndex: Math.floor(Math.random() * figmaColors.length),
+      sizePhase: Math.random() * Math.PI * 2,
+      sizeSpeed: 0.002 + Math.random() * 0.003, // Much slower size changes
+      originalOpacity: 0.4 + Math.random() * 0.4,
+      time: 0
+    };
+    
+    // Set visual properties
+    const color = figmaColors[particleData.colorIndex];
+    particle.style.backgroundColor = color;
+    particle.style.opacity = particleData.originalOpacity;
+    particle.style.width = particleData.currentSize + 'px';
+    particle.style.height = particleData.currentSize + 'px';
+    particle.style.left = particleData.x + 'px';
+    particle.style.top = particleData.y + 'px';
+    
+    // Remove CSS animations as we'll handle movement manually
+    particle.style.animation = 'none';
+    
+    document.body.appendChild(particle);
+    particles.push(particleData);
+  }
+}
+
+function clearParticles() {
+  particles.forEach(particleData => {
+    if (particleData.element && particleData.element.parentNode) {
+      particleData.element.parentNode.removeChild(particleData.element);
+    }
+  });
+  particles = [];
+}
+
+function startParticlesAnimation() {
+  const animateParticles = () => {
+    // Update face position for particle repulsion
+    updateFacePosition();
+    
+    particles.forEach((particleData, index) => {
+      const particle = particleData.element;
+      
+      // Increment internal time for autonomous movement
+      particleData.time += 1;
+      
+      // Autonomous movement - each particle moves in its own pattern
+      const autonomousX = Math.sin(particleData.time * particleData.autonomousMovement.frequency + particleData.autonomousMovement.phaseX) * particleData.autonomousMovement.amplitude;
+      const autonomousY = Math.cos(particleData.time * particleData.autonomousMovement.frequency + particleData.autonomousMovement.phaseY) * particleData.autonomousMovement.amplitude;
+      
+      // Add much gentler autonomous movement to velocity
+      particleData.vx += autonomousX * 0.00005; // Much gentler movement
+      particleData.vy += autonomousY * 0.00005;
+      
+      // Face repulsion (keep particles away from face)
+      if (currentFaces.length > 0) {
+        const faceX = lastFacePosition.x * window.innerWidth;
+        const faceY = lastFacePosition.y * window.innerHeight;
+        
+        const dx = particleData.x - faceX;
+        const dy = particleData.y - faceY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        // If too close to face, push away
+        if (distance < particleData.repulsionRadius) {
+          const repulsionForce = (particleData.repulsionRadius - distance) / particleData.repulsionRadius;
+          const normalizedDx = dx / distance || 0;
+          const normalizedDy = dy / distance || 0;
+          
+          particleData.vx += normalizedDx * repulsionForce * 0.01;
+          particleData.vy += normalizedDy * repulsionForce * 0.01;
+        }
+        
+        // Very subtle influence from face movement (not attraction)
+        particleData.vx += (Math.random() - 0.5) * particleData.faceInfluence;
+        particleData.vy += (Math.random() - 0.5) * particleData.faceInfluence;
+      } else {
+        // No face - more random movement
+        particleData.vx += (Math.random() - 0.5) * 0.003;
+        particleData.vy += (Math.random() - 0.5) * 0.003;
+      }
+      
+      // Apply velocity
+      particleData.x += particleData.vx;
+      particleData.y += particleData.vy;
+      
+      // Apply inertia/friction
+      particleData.vx *= particleData.inertia;
+      particleData.vy *= particleData.inertia;
+      
+      // Boundary wrapping with padding
+      const padding = 100;
+      if (particleData.x < -padding) particleData.x = window.innerWidth + padding;
+      if (particleData.x > window.innerWidth + padding) particleData.x = -padding;
+      if (particleData.y < -padding) particleData.y = window.innerHeight + padding;
+      if (particleData.y > window.innerHeight + padding) particleData.y = -padding;
+      
+      // Autonomous size changes - each particle pulses at its own rate
+      particleData.sizePhase += particleData.sizeSpeed;
+      
+      // Base size multiplier from autonomous pulsing - much more subtle
+      let baseSizeMultiplier = 0.9 + Math.sin(particleData.sizePhase) * 0.15; // Size varies from 0.75x to 1.05x (much more subtle)
+      
+      // Add very gentle scaling based on face movement intensity
+      let movementScaleMultiplier = 1.0;
+      if (currentFaces.length > 0) {
+        // Much more gentle scaling when face is moving
+        const maxIntensity = 20; // Higher threshold for more gentle effect
+        const normalizedIntensity = Math.min(faceMovementIntensity / maxIntensity, 1);
+        
+        // Scale varies very gently from 0.95x to 1.1x based on movement
+        movementScaleMultiplier = 0.95 + normalizedIntensity * 0.15;
+        
+        // Different particles react very slightly differently to movement
+        const particleReactivity = 0.8 + (index % 3) * 0.1; // Much more subtle reactivity
+        movementScaleMultiplier = 1 + (movementScaleMultiplier - 1) * particleReactivity;
+      }
+      
+      const finalSize = particleData.baseSize * baseSizeMultiplier * movementScaleMultiplier;
+      
+      // Apply visual changes
+      particle.style.left = particleData.x + 'px';
+      particle.style.top = particleData.y + 'px';
+      particle.style.width = finalSize + 'px';
+      particle.style.height = finalSize + 'px';
+      
+      // Opacity changes based on size and movement
+      const speed = Math.sqrt(particleData.vx * particleData.vx + particleData.vy * particleData.vy);
+      const sizeOpacity = 0.3 + (finalSize / particleData.baseSize) * 0.4;
+      const speedOpacity = 0.7 + Math.min(speed * 15, 0.3);
+      const movementOpacity = 1 + Math.min(faceMovementIntensity * 0.1, 0.3); // Brighter when moving
+      particle.style.opacity = particleData.originalOpacity * sizeOpacity * speedOpacity * movementOpacity;
+    });
+    
+    if (particlesMode) {
+      particleAnimationId = requestAnimationFrame(animateParticles);
+    }
+  };
+  
+  animateParticles();
+}
+
+function updateFacePosition() {
+  if (currentFaces.length > 0 && webcamEl.videoWidth && webcamEl.videoHeight) {
+    const face = currentFaces[0];
+    const b = face.boundingBox;
+    
+    // Compute displayed video rect for object-fit: cover mapping
+    const vw = webcamEl.videoWidth;
+    const vh = webcamEl.videoHeight;
+    const cw = window.innerWidth;
+    const ch = window.innerHeight;
+    const videoAspect = vw / vh;
+    const containerAspect = cw / ch;
+
+    let displayW, displayH, offsetX, offsetY;
+    if (videoAspect > containerAspect) {
+      displayH = ch;
+      displayW = ch * videoAspect;
+      offsetX = (cw - displayW) / 2;
+      offsetY = 0;
+    } else {
+      displayW = cw;
+      displayH = cw / videoAspect;
+      offsetX = 0;
+      offsetY = (ch - displayH) / 2;
+    }
+
+    // Convert face position to screen coordinates
+    const faceScreenX = (b.originX / vw) * displayW + offsetX;
+    const faceScreenY = (b.originY / vh) * displayH + offsetY;
+    
+    // Normalize to 0-1 range for smoother interpolation
+    const targetX = faceScreenX / cw;
+    const targetY = faceScreenY / ch;
+    
+    // Calculate movement intensity before updating position
+    const deltaX = Math.abs(targetX - lastFacePosition.x);
+    const deltaY = Math.abs(targetY - lastFacePosition.y);
+    const currentMovement = deltaX + deltaY;
+    
+    // Update movement intensity with decay - much more gentle
+    faceMovementIntensity = Math.max(currentMovement * 50, faceMovementIntensity * 0.95); // Reduced from 100 to 50
+    
+    // Smooth interpolation to avoid jittery movement
+    lastFacePosition.x += (targetX - lastFacePosition.x) * 0.1;
+    lastFacePosition.y += (targetY - lastFacePosition.y) * 0.1;
+  } else {
+    // No face detected - decay movement intensity
+    faceMovementIntensity *= 0.95;
+  }
+}
+
+function stopParticlesAnimation() {
+  if (particleAnimationId) {
+    cancelAnimationFrame(particleAnimationId);
+    particleAnimationId = null;
   }
 }
 
