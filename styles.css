@@ -494,10 +494,9 @@ body {
 /* Footer */
 #kaseya-footer {
   position: fixed;
-  bottom: -5vh;
-  left: 50%;
-  transform: translateX(-50%) translateY(10vh);
-  width: 375px; /* Ancho exacto de iPhone */
+  bottom: -10px;
+  left: 0;
+  width: 100vw; /* Ancho completo de la pantalla */
   height: auto;
   z-index: 5;
   opacity: 0.85;
