@@ -590,21 +590,33 @@ body {
 @supports (-webkit-touch-callout: none) {
   #kaseya-footer {
     /* Safari específico en iOS */
-    bottom: 0;
+    bottom: -5px;
+    width: 100vw;
+    min-width: 100vw;
     padding-bottom: 0;
+  }
+  
+  #kaseya-footer img {
+    width: 100vw !important;
+    min-width: 100vw;
+    height: auto;
+    object-fit: cover;
   }
 }
 
 /* Additional fix for iOS viewport issues */
 @media screen and (max-device-width: 480px) {
   #kaseya-footer {
-    bottom: 0;
+    bottom: -5px;
     min-height: 80px;
+    width: 100vw;
+    min-width: 100vw;
   }
   
   #kaseya-footer img {
     max-height: 120px;
-    width: 100%;
+    width: 100vw !important;
+    min-width: 100vw;
   }
 }
 
@@ -612,7 +624,38 @@ body {
 @media only screen and (-webkit-min-device-pixel-ratio: 2) and (max-device-width: 480px) {
   #kaseya-footer {
     position: fixed;
-    bottom: 0;
+    bottom: -8px;
+    left: 0;
+    right: 0;
+    width: 100vw;
+    min-width: 100vw;
     transform: none;
+  }
+  
+  #kaseya-footer img {
+    width: 100vw !important;
+    min-width: 100vw;
+    object-fit: cover;
+  }
+}
+
+/* Specific Safari iPhone detection */
+@media screen and (max-width: 414px) and (-webkit-min-device-pixel-ratio: 2) {
+  #kaseya-footer {
+    bottom: -10px !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100vw !important;
+    min-width: 100vw !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  
+  #kaseya-footer img {
+    width: 100vw !important;
+    min-width: 100vw !important;
+    max-width: none !important;
+    object-fit: cover !important;
+    display: block !important;
   }
 }
