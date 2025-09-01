@@ -498,7 +498,7 @@ body {
   left: 0;
   width: 100vw; /* Ancho completo de la pantalla */
   height: auto;
-  z-index: 5;
+  z-index: 30; /* ensure above video/canvas and controls */
   opacity: 0.85;
   pointer-events: none;
   /* Fix para Safari en iPhone */
@@ -588,12 +588,17 @@ body {
 
 /* Specific fix for Safari on iOS */
 @supports (-webkit-touch-callout: none) {
+  /* Avoid ancestor clipping on iOS Safari */
+  #app { overflow: visible; }
+
   #kaseya-footer {
     /* Safari específico en iOS */
     bottom: 10px;
     width: 100vw;
     min-width: 100vw;
     padding-bottom: 0;
+    z-index: 30;
+    clip-path: inset(0);
   }
   
   #kaseya-footer img {
@@ -601,6 +606,7 @@ body {
     min-width: 100vw;
     height: auto;
     object-fit: contain;
+  clip-path: inset(0);
   }
 }
 
@@ -611,6 +617,7 @@ body {
     min-height: 80px;
     width: 100vw;
     min-width: 100vw;
+  z-index: 30;
   }
   
   #kaseya-footer img {
@@ -618,6 +625,7 @@ body {
     width: 100vw !important;
     min-width: 100vw;
     object-fit: contain;
+  clip-path: inset(0);
   }
 }
 

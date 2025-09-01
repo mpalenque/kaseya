@@ -35,7 +35,9 @@ let permanentWordElement = null;
 let particlesMode = false;
 let particles = [];
 let particleAnimationId = null;
-let lastFacePosition = { x: 0.5, y: 0.5 }; // Normalized face position
+let lastFacePosition = { x: 0.5, y: 0.5 }; // Normalized face center position (0..1)
+let lastFaceCenterPx = { x: window.innerWidth * 0.5, y: window.innerHeight * 0.5 }; // Screen-space center
+let lastFaceRadiusPx = Math.min(window.innerWidth, window.innerHeight) * 0.12; // Approx face radius in px
 let faceMovementIntensity = 0; // Track how much the face is moving
 
 // Word pool for the roulette
@@ -763,11 +765,11 @@ function createParticles() {
     // Find a position that doesn't overlap with buttons or face area
     let x, y;
     let attempts = 0;
-    do {
+  do {
       x = Math.random() * window.innerWidth;
       y = Math.random() * window.innerHeight;
       attempts++;
-    } while (attempts < 100 && (isInButtonZone(x, y, buttonZones) || isInFaceArea(x, y)));
+  } while (attempts < 200 && (isInButtonZone(x, y, buttonZones) || isInFaceArea(x, y)));
     
     // Create particle data object with much more varied sizes
     const particleData = {
@@ -824,16 +826,12 @@ function isInButtonZone(x, y, buttonZones) {
 // Helper function to check if a position is in the face area
 function isInFaceArea(x, y) {
   if (currentFaces.length === 0) return false;
-  
-  const faceX = lastFacePosition.x * window.innerWidth;
-  const faceY = lastFacePosition.y * window.innerHeight;
-  const faceExclusionRadius = 180; // Larger exclusion zone for initial positioning
-  
-  const dx = x - faceX;
-  const dy = y - faceY;
+
+  const dx = x - lastFaceCenterPx.x;
+  const dy = y - lastFaceCenterPx.y;
   const distance = Math.sqrt(dx * dx + dy * dy);
-  
-  return distance < faceExclusionRadius;
+  const exclusion = Math.max(150, lastFaceRadiusPx * 1.2); // Buffer around face
+  return distance < exclusion;
 }
 
 function clearParticles() {
@@ -866,38 +864,40 @@ function startParticlesAnimation() {
       
       // Face repulsion and organic movement based on face movement
       if (currentFaces.length > 0) {
-        const faceX = lastFacePosition.x * window.innerWidth;
-        const faceY = lastFacePosition.y * window.innerHeight;
-        
+        const faceX = lastFaceCenterPx.x;
+        const faceY = lastFaceCenterPx.y;
+
         const dx = particleData.x - faceX;
         const dy = particleData.y - faceY;
         const distance = Math.sqrt(dx * dx + dy * dy);
-        
-        // Strong repulsion from face area - much larger radius to avoid covering face
-        const faceExclusionRadius = 150; // Large exclusion zone around face
-        if (distance < faceExclusionRadius) {
-          const repulsionForce = (faceExclusionRadius - distance) / faceExclusionRadius;
+
+        // Strict inner exclusion: never allow particles inside this
+        const innerRadius = Math.max(120, lastFaceRadiusPx * 0.9);
+        const outerRadius = Math.max(220, lastFaceRadiusPx * 1.8);
+        if (distance < innerRadius) {
+          const normalizedDx = dx / (distance || 1);
+          const normalizedDy = dy / (distance || 1);
+          // Push out strongly
+          particleData.vx += normalizedDx * 0.2;
+          particleData.vy += normalizedDy * 0.2;
+          // Clamp position just outside innerRadius to avoid jitter
+          const safeDist = innerRadius + 2;
+          particleData.x = faceX + normalizedDx * safeDist;
+          particleData.y = faceY + normalizedDy * safeDist;
+        } else if (distance < outerRadius) {
+          // Soft repulsion within outer radius
+          const repulsionForce = (outerRadius - distance) / outerRadius;
           const normalizedDx = dx / distance || 0;
           const normalizedDy = dy / distance || 0;
-          
-          // Strong force to push particles away from face
-          particleData.vx += normalizedDx * repulsionForce * 0.05;
-          particleData.vy += normalizedDy * repulsionForce * 0.05;
-          
-          // If particle is too close, teleport it away
-          if (distance < 80) {
-            const teleportDistance = 200;
-            particleData.x = faceX + normalizedDx * teleportDistance;
-            particleData.y = faceY + normalizedDy * teleportDistance;
-          }
+          particleData.vx += normalizedDx * repulsionForce * 0.06;
+          particleData.vy += normalizedDy * repulsionForce * 0.06;
         }
-        
+
         // Additional repulsion based on original particle radius for extra safety
         if (distance < particleData.repulsionRadius) {
           const repulsionForce = (particleData.repulsionRadius - distance) / particleData.repulsionRadius;
           const normalizedDx = dx / distance || 0;
           const normalizedDy = dy / distance || 0;
-          
           particleData.vx += normalizedDx * repulsionForce * 0.03;
           particleData.vy += normalizedDy * repulsionForce * 0.03;
         }
@@ -909,8 +909,8 @@ function startParticlesAnimation() {
           const wave = Math.cos(particleData.time * 0.008 + index * 0.5) * faceMovementIntensity * 0.001;
           
           // Apply swirl motion perpendicular to face direction
-          const perpX = -normalizedDy || (Math.random() - 0.5);
-          const perpY = normalizedDx || (Math.random() - 0.5);
+          const perpX = -dy / (distance || 1);
+          const perpY = dx / (distance || 1);
           
           particleData.vx += perpX * swirl;
           particleData.vy += perpY * wave;
@@ -1032,13 +1032,18 @@ function updateFacePosition() {
       offsetY = (ch - displayH) / 2;
     }
 
-    // Convert face position to screen coordinates
-    const faceScreenX = (b.originX / vw) * displayW + offsetX;
-    const faceScreenY = (b.originY / vh) * displayH + offsetY;
+  // Convert face bbox to screen coordinates
+  const faceScreenX = (b.originX / vw) * displayW + offsetX;
+  const faceScreenY = (b.originY / vh) * displayH + offsetY;
+  const faceScreenW = (b.width / vw) * displayW;
+  const faceScreenH = (b.height / vh) * displayH;
+  const centerX = faceScreenX + faceScreenW / 2;
+  const centerY = faceScreenY + faceScreenH / 2;
+  const approxRadius = Math.max(faceScreenW, faceScreenH) * 0.5;
     
     // Normalize to 0-1 range for smoother interpolation
-    const targetX = faceScreenX / cw;
-    const targetY = faceScreenY / ch;
+  const targetX = centerX / cw;
+  const targetY = centerY / ch;
     
     // Calculate movement intensity before updating position
     const deltaX = Math.abs(targetX - lastFacePosition.x);
@@ -1049,8 +1054,13 @@ function updateFacePosition() {
     faceMovementIntensity = Math.max(currentMovement * 50, faceMovementIntensity * 0.95); // Reduced from 100 to 50
     
     // Smooth interpolation to avoid jittery movement
-    lastFacePosition.x += (targetX - lastFacePosition.x) * 0.1;
-    lastFacePosition.y += (targetY - lastFacePosition.y) * 0.1;
+  lastFacePosition.x += (targetX - lastFacePosition.x) * 0.1;
+  lastFacePosition.y += (targetY - lastFacePosition.y) * 0.1;
+  // Update pixel center/radius for particle avoidance and placement checks
+  lastFaceCenterPx.x = centerX;
+  lastFaceCenterPx.y = centerY;
+  // Smooth the radius a bit
+  lastFaceRadiusPx = lastFaceRadiusPx * 0.9 + approxRadius * 0.1;
   } else {
     // No face detected - decay movement intensity
     faceMovementIntensity *= 0.95;
