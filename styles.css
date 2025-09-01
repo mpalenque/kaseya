@@ -616,8 +616,8 @@ body {
 @media screen and (max-device-width: 480px) {
   #kaseya-footer {
     bottom: 15px;
-  min-height: 160px;
-    height: clamp(160px, 25vh, 255px);
+  min-height: 184px;
+    height: clamp(184px, 29vh, 293px);
     width: 100vw;
     min-width: 100vw;
   z-index: 18;
@@ -643,7 +643,7 @@ body {
     min-width: 100vw !important;
     margin: 0 !important;
     padding: 0 !important;
-  height: clamp(160px, 25vh, 255px) !important;
+  height: clamp(184px, 29vh, 293px) !important;
   z-index: 18 !important;
   }
   
@@ -692,7 +692,7 @@ body {
     min-width: 100vw !important;
     margin: 0 !important;
     padding: 0 !important;
-  height: clamp(173px, 25vh, 276px) !important;
+  height: clamp(199px, 29vh, 317px) !important;
   z-index: 18 !important;
   }
   
