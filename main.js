@@ -516,7 +516,7 @@ async function captureHTMLElements(ctx, canvasWidth, canvasHeight) {
       
       // Draw particle
       ctx.save();
-      ctx.globalAlpha = parseFloat(opacity);
+      ctx.globalAlpha = 1.0; // Always fully opaque
       ctx.fillStyle = backgroundColor;
       ctx.beginPath();
       ctx.ellipse(x + width/2, y + height/2, width/2, height/2, 0, 0, Math.PI * 2);
@@ -775,7 +775,7 @@ function createParticles() {
       colorIndex: Math.floor(Math.random() * figmaColors.length),
       sizePhase: Math.random() * Math.PI * 2,
       sizeSpeed: 0.002 + Math.random() * 0.003, // Much slower size changes
-      originalOpacity: 0.4 + Math.random() * 0.4,
+      originalOpacity: 1.0, // Completely opaque - no transparency
       time: 0
     };
     
@@ -896,12 +896,8 @@ function startParticlesAnimation() {
       particle.style.width = finalSize + 'px';
       particle.style.height = finalSize + 'px';
       
-      // Opacity changes based on size and movement
-      const speed = Math.sqrt(particleData.vx * particleData.vx + particleData.vy * particleData.vy);
-      const sizeOpacity = 0.3 + (finalSize / particleData.baseSize) * 0.4;
-      const speedOpacity = 0.7 + Math.min(speed * 15, 0.3);
-      const movementOpacity = 1 + Math.min(faceMovementIntensity * 0.1, 0.3); // Brighter when moving
-      particle.style.opacity = particleData.originalOpacity * sizeOpacity * speedOpacity * movementOpacity;
+      // Opacity - completely opaque always
+      particle.style.opacity = 1.0;
     });
     
     if (particlesMode) {

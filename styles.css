@@ -494,21 +494,20 @@ body {
 /* Footer */
 #kaseya-footer {
   position: fixed;
-  bottom: -10vh; /* Subir un poco para que se vea todo el texto */
-  left: 0;
-  width: 100vw;
-  height: 60vh; /* Hacer un poco más alto */
+  bottom: -5vh;
+  left: 50%;
+  transform: translateX(-50%) translateY(10vh);
+  width: 375px; /* Ancho exacto de iPhone */
+  height: auto;
   z-index: 5;
   opacity: 0.85;
   pointer-events: none;
-  transform: translateY(15vh); /* Ajustar centrado */
 }
 
 #kaseya-footer img {
-  width: 100vw; /* Ancho completo de la pantalla */
-  height: 100vw; /* Mantener proporción circular */
-  max-height: 120vh; /* Permitir un poco más de altura */
-  object-fit: cover;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
   filter: drop-shadow(0 4px 12px rgba(138, 43, 226, 0.4));
 }
 
