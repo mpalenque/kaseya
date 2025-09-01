@@ -616,8 +616,8 @@ body {
 @media screen and (max-device-width: 480px) {
   #kaseya-footer {
     bottom: 15px;
-  min-height: 184px;
-    height: clamp(184px, 29vh, 293px);
+  min-height: 193px;
+    height: clamp(193px, 30vh, 308px);
     width: 100vw;
     min-width: 100vw;
   z-index: 18;
@@ -643,7 +643,7 @@ body {
     min-width: 100vw !important;
     margin: 0 !important;
     padding: 0 !important;
-  height: clamp(184px, 29vh, 293px) !important;
+  height: clamp(193px, 30vh, 308px) !important;
   z-index: 18 !important;
   }
   
@@ -668,7 +668,7 @@ body {
     max-width: 100vw !important;
     margin: 0 !important;
     padding: 0 !important;
-  height: clamp(276px, 37vh, 423px) !important;
+  height: clamp(290px, 39vh, 444px) !important;
   z-index: 18 !important;
   }
   
@@ -692,7 +692,7 @@ body {
     min-width: 100vw !important;
     margin: 0 !important;
     padding: 0 !important;
-  height: clamp(199px, 29vh, 317px) !important;
+  height: clamp(209px, 30vh, 333px) !important;
   z-index: 18 !important;
   }
   
@@ -719,8 +719,8 @@ body {
     margin: 0 !important;
     padding: 0 !important;
     padding-bottom: env(safe-area-inset-bottom, 5px) !important;
-  min-height: 184px !important;
-    height: clamp(201px, 29vh, 305px) !important;
+  min-height: 193px !important;
+    height: clamp(211px, 30vh, 320px) !important;
   z-index: 18 !important;
   }
   
