@@ -668,7 +668,7 @@ body {
     max-width: 100vw !important;
     margin: 0 !important;
     padding: 0 !important;
-  height: clamp(240px, 32vh, 368px) !important;
+  height: clamp(276px, 37vh, 423px) !important;
   z-index: 18 !important;
   }
   
