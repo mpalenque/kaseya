@@ -760,14 +760,14 @@ function createParticles() {
     const particle = document.createElement('div');
     particle.className = 'particle';
     
-    // Find a position that doesn't overlap with buttons
+    // Find a position that doesn't overlap with buttons or face area
     let x, y;
     let attempts = 0;
     do {
       x = Math.random() * window.innerWidth;
       y = Math.random() * window.innerHeight;
       attempts++;
-    } while (attempts < 50 && isInButtonZone(x, y, buttonZones));
+    } while (attempts < 100 && (isInButtonZone(x, y, buttonZones) || isInFaceArea(x, y)));
     
     // Create particle data object with much more varied sizes
     const particleData = {
@@ -787,7 +787,7 @@ function createParticles() {
         phaseY: Math.random() * Math.PI * 2
       },
       faceInfluence: 0.00002 + Math.random() * 0.00008, // Much weaker influence
-      repulsionRadius: 100 + Math.random() * 150,
+      repulsionRadius: 120 + Math.random() * 180, // Increased base repulsion radius
       colorIndex: Math.floor(Math.random() * figmaColors.length),
       sizePhase: Math.random() * Math.PI * 2,
       sizeSpeed: 0.002 + Math.random() * 0.003, // Much slower size changes
@@ -819,6 +819,21 @@ function isInButtonZone(x, y, buttonZones) {
     return x >= zone.x && x <= zone.x + zone.width && 
            y >= zone.y && y <= zone.y + zone.height;
   });
+}
+
+// Helper function to check if a position is in the face area
+function isInFaceArea(x, y) {
+  if (currentFaces.length === 0) return false;
+  
+  const faceX = lastFacePosition.x * window.innerWidth;
+  const faceY = lastFacePosition.y * window.innerHeight;
+  const faceExclusionRadius = 180; // Larger exclusion zone for initial positioning
+  
+  const dx = x - faceX;
+  const dy = y - faceY;
+  const distance = Math.sqrt(dx * dx + dy * dy);
+  
+  return distance < faceExclusionRadius;
 }
 
 function clearParticles() {
@@ -858,26 +873,49 @@ function startParticlesAnimation() {
         const dy = particleData.y - faceY;
         const distance = Math.sqrt(dx * dx + dy * dy);
         
-        // If too close to face, push away
+        // Strong repulsion from face area - much larger radius to avoid covering face
+        const faceExclusionRadius = 150; // Large exclusion zone around face
+        if (distance < faceExclusionRadius) {
+          const repulsionForce = (faceExclusionRadius - distance) / faceExclusionRadius;
+          const normalizedDx = dx / distance || 0;
+          const normalizedDy = dy / distance || 0;
+          
+          // Strong force to push particles away from face
+          particleData.vx += normalizedDx * repulsionForce * 0.05;
+          particleData.vy += normalizedDy * repulsionForce * 0.05;
+          
+          // If particle is too close, teleport it away
+          if (distance < 80) {
+            const teleportDistance = 200;
+            particleData.x = faceX + normalizedDx * teleportDistance;
+            particleData.y = faceY + normalizedDy * teleportDistance;
+          }
+        }
+        
+        // Additional repulsion based on original particle radius for extra safety
         if (distance < particleData.repulsionRadius) {
           const repulsionForce = (particleData.repulsionRadius - distance) / particleData.repulsionRadius;
           const normalizedDx = dx / distance || 0;
           const normalizedDy = dy / distance || 0;
           
-          particleData.vx += normalizedDx * repulsionForce * 0.01;
-          particleData.vy += normalizedDy * repulsionForce * 0.01;
+          particleData.vx += normalizedDx * repulsionForce * 0.03;
+          particleData.vy += normalizedDy * repulsionForce * 0.03;
         }
         
         // More organic movement based on face movement intensity
         if (faceMovementIntensity > 0.1) {
-          // Add swirling motion when face moves
+          // Add swirling motion when face moves - but keep away from face
           const swirl = Math.sin(particleData.time * 0.01 + index) * faceMovementIntensity * 0.002;
           const wave = Math.cos(particleData.time * 0.008 + index * 0.5) * faceMovementIntensity * 0.001;
           
-          particleData.vx += swirl;
-          particleData.vy += wave;
+          // Apply swirl motion perpendicular to face direction
+          const perpX = -normalizedDy || (Math.random() - 0.5);
+          const perpY = normalizedDx || (Math.random() - 0.5);
           
-          // Add some random organic movement
+          particleData.vx += perpX * swirl;
+          particleData.vy += perpY * wave;
+          
+          // Add some random organic movement away from face
           particleData.vx += (Math.random() - 0.5) * faceMovementIntensity * 0.001;
           particleData.vy += (Math.random() - 0.5) * faceMovementIntensity * 0.001;
         }
