@@ -506,20 +506,19 @@ async function captureHTMLElements(ctx, canvasWidth, canvasHeight) {
       
       const x = rect.left * scaleX;
       const y = rect.top * scaleY;
-      const width = rect.width * scaleX;
-      const height = rect.height * scaleY;
+      const diameter = rect.width * Math.min(scaleX, scaleY); // Use minimum scale to maintain aspect ratio
       
       // Get computed styles
       const styles = window.getComputedStyle(particle);
       const backgroundColor = styles.backgroundColor;
       const opacity = styles.opacity;
       
-      // Draw particle
+      // Draw particle as perfect circle
       ctx.save();
       ctx.globalAlpha = 1.0; // Always fully opaque
       ctx.fillStyle = backgroundColor;
       ctx.beginPath();
-      ctx.ellipse(x + width/2, y + height/2, width/2, height/2, 0, 0, Math.PI * 2);
+      ctx.arc(x + (rect.width * scaleX)/2, y + (rect.height * scaleY)/2, diameter/2, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     });
@@ -749,15 +748,32 @@ function createParticles() {
   
   const particleCount = 25;
   
+  // Define button exclusion zones
+  const buttonZones = [
+    // Record button area (bottom center)
+    { x: window.innerWidth/2 - 100, y: window.innerHeight - 200, width: 200, height: 150 },
+    // Particles toggle button area (bottom left of center) 
+    { x: window.innerWidth/2 - 200, y: window.innerHeight - 200, width: 100, height: 150 }
+  ];
+  
   for (let i = 0; i < particleCount; i++) {
     const particle = document.createElement('div');
     particle.className = 'particle';
     
+    // Find a position that doesn't overlap with buttons
+    let x, y;
+    let attempts = 0;
+    do {
+      x = Math.random() * window.innerWidth;
+      y = Math.random() * window.innerHeight;
+      attempts++;
+    } while (attempts < 50 && isInButtonZone(x, y, buttonZones));
+    
     // Create particle data object with much more varied sizes
     const particleData = {
       element: particle,
-      x: Math.random() * window.innerWidth,
-      y: Math.random() * window.innerHeight,
+      x: x,
+      y: y,
       vx: (Math.random() - 0.5) * 0.8, // Slower, more gentle movement
       vy: (Math.random() - 0.5) * 0.8,
       baseSize: 15 + Math.random() * 80, // Much larger and more varied sizes (15-95px)
@@ -776,7 +792,8 @@ function createParticles() {
       sizePhase: Math.random() * Math.PI * 2,
       sizeSpeed: 0.002 + Math.random() * 0.003, // Much slower size changes
       originalOpacity: 1.0, // Completely opaque - no transparency
-      time: 0
+      time: 0,
+      buttonZones: buttonZones // Store reference for later use
     };
     
     // Set visual properties
@@ -794,6 +811,14 @@ function createParticles() {
     document.body.appendChild(particle);
     particles.push(particleData);
   }
+}
+
+// Helper function to check if a position is in a button zone
+function isInButtonZone(x, y, buttonZones) {
+  return buttonZones.some(zone => {
+    return x >= zone.x && x <= zone.x + zone.width && 
+           y >= zone.y && y <= zone.y + zone.height;
+  });
 }
 
 function clearParticles() {
@@ -824,7 +849,7 @@ function startParticlesAnimation() {
       particleData.vx += autonomousX * 0.00005; // Much gentler movement
       particleData.vy += autonomousY * 0.00005;
       
-      // Face repulsion (keep particles away from face)
+      // Face repulsion and organic movement based on face movement
       if (currentFaces.length > 0) {
         const faceX = lastFacePosition.x * window.innerWidth;
         const faceY = lastFacePosition.y * window.innerHeight;
@@ -843,6 +868,20 @@ function startParticlesAnimation() {
           particleData.vy += normalizedDy * repulsionForce * 0.01;
         }
         
+        // More organic movement based on face movement intensity
+        if (faceMovementIntensity > 0.1) {
+          // Add swirling motion when face moves
+          const swirl = Math.sin(particleData.time * 0.01 + index) * faceMovementIntensity * 0.002;
+          const wave = Math.cos(particleData.time * 0.008 + index * 0.5) * faceMovementIntensity * 0.001;
+          
+          particleData.vx += swirl;
+          particleData.vy += wave;
+          
+          // Add some random organic movement
+          particleData.vx += (Math.random() - 0.5) * faceMovementIntensity * 0.001;
+          particleData.vy += (Math.random() - 0.5) * faceMovementIntensity * 0.001;
+        }
+        
         // Very subtle influence from face movement (not attraction)
         particleData.vx += (Math.random() - 0.5) * particleData.faceInfluence;
         particleData.vy += (Math.random() - 0.5) * particleData.faceInfluence;
@@ -859,6 +898,27 @@ function startParticlesAnimation() {
       // Apply inertia/friction
       particleData.vx *= particleData.inertia;
       particleData.vy *= particleData.inertia;
+      
+      // Button avoidance - push particles away from button zones
+      if (particleData.buttonZones) {
+        particleData.buttonZones.forEach(zone => {
+          const zoneX = zone.x + zone.width/2;
+          const zoneY = zone.y + zone.height/2;
+          const dx = particleData.x - zoneX;
+          const dy = particleData.y - zoneY;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          const avoidanceRadius = Math.max(zone.width, zone.height) * 0.8;
+          
+          if (distance < avoidanceRadius && distance > 0) {
+            const repulsionForce = (avoidanceRadius - distance) / avoidanceRadius;
+            const normalizedDx = dx / distance;
+            const normalizedDy = dy / distance;
+            
+            particleData.vx += normalizedDx * repulsionForce * 0.02;
+            particleData.vy += normalizedDy * repulsionForce * 0.02;
+          }
+        });
+      }
       
       // Boundary wrapping with padding
       const padding = 100;
