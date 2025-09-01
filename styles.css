@@ -615,14 +615,14 @@ body {
 @media screen and (max-device-width: 480px) {
   #kaseya-footer {
     bottom: 15px;
-    min-height: 80px;
+  min-height: 140px;
     width: 100vw;
     min-width: 100vw;
   z-index: 30;
   }
   
   #kaseya-footer img {
-    max-height: 120px;
+  max-height: none;
     width: 100vw !important;
     min-width: 100vw;
   object-fit: contain;
@@ -711,6 +711,7 @@ body {
     margin: 0 !important;
     padding: 0 !important;
     padding-bottom: env(safe-area-inset-bottom, 5px) !important;
+  min-height: 140px !important;
   }
   
   #kaseya-footer img {
@@ -720,7 +721,7 @@ body {
   object-fit: contain !important; /* Prevent top being cut in Safari */
   object-position: center bottom !important;
     display: block !important;
-    height: auto !important;
-    min-height: 70px !important;
+  height: auto !important;
+  min-height: 0 !important;
   }
 }
