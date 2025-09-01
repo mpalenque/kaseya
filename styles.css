@@ -600,7 +600,7 @@ body {
     padding-bottom: 0;
   z-index: 18;
     clip-path: inset(0);
-    height: clamp(140px, 20vh, 220px);
+    height: clamp(160px, 22vh, 250px);
   }
   
   #kaseya-footer img {
@@ -732,5 +732,30 @@ body {
   object-position: center bottom !important;
     display: block !important;
   height: 100% !important;
+  }
+}
+
+/* Safari Preview Mode fix - cuando no hay barra de navegación */
+@media screen and (max-width: 480px) and (-webkit-min-device-pixel-ratio: 2) and (display-mode: browser) {
+  #kaseya-footer {
+    height: clamp(240px, 35vh, 380px) !important;
+    min-height: 240px !important;
+  }
+}
+
+/* Safari Preview Mode alternativo - para pantallas sin UI chrome */
+@supports (-webkit-touch-callout: none) {
+  @media screen and (max-width: 480px) and (min-height: 700px) {
+    #kaseya-footer {
+      height: clamp(250px, 32vh, 400px) !important;
+      min-height: 250px !important;
+    }
+  }
+  
+  @media screen and (max-width: 428px) and (min-width: 375px) and (min-height: 750px) {
+    #kaseya-footer {
+      height: clamp(320px, 42vh, 500px) !important;
+      min-height: 320px !important;
+    }
   }
 }
