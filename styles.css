@@ -3,7 +3,17 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  -webkit-user-select: none; /* prevent text selection iOS */
+  user-select: none;
 }
+
+html, body, #app, video, canvas, button, .word-text, .preview-label, #preview-container, #bottomBar {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  -webkit-touch-callout: none !important;
+}
+
+img { -webkit-user-drag: none; user-drag: none; }
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -275,6 +285,7 @@ body {
   justify-content: center;
   max-width: 90vw;
   max-height: 82vh;
+  /* Mobile safe-area responsive tweaks will override below */
 }
 
 #preview-video, #preview-image {
@@ -293,8 +304,8 @@ body {
 .preview-actions {
   position: absolute;
   left: 50%;
-  bottom: clamp(-70px, -12vw, -95px); /* responsive bottom spacing */
-  transform: translateX(-50%);
+  bottom: clamp(-60px, -10vw, -90px);
+  transform: translate(-50%, 0);
   display: flex;
   gap: clamp(30px, 8vw, 80px); /* responsive gap between buttons */
   align-items: flex-start;
@@ -417,25 +428,40 @@ body {
 .word-text {
   background: linear-gradient(135deg, rgba(138, 43, 226, 0.95), rgba(75, 0, 130, 0.95));
   color: white;
-  padding: 20px 30px;
+  width: 300px; /* fixed width */
+  height: 90px; /* fixed height */
+  padding: 0;
   border-radius: 30px;
-  font-size: 2.5rem;
-  font-weight: bold;
+  font-weight: 700;
   text-align: center;
   border: 3px solid rgba(255,255,255,0.8);
-  box-shadow: 
-    0 10px 30px rgba(138, 43, 226, 0.3),
-    0 0 20px rgba(138, 43, 226, 0.2),
-    inset 0 1px 0 rgba(255,255,255,0.3);
+  box-shadow: 0 10px 30px rgba(138, 43, 226, 0.3), 0 0 20px rgba(138, 43, 226, 0.2), inset 0 1px 0 rgba(255,255,255,0.3);
   backdrop-filter: blur(10px);
-  letter-spacing: 2px;
+  letter-spacing: 1px;
   position: relative;
   z-index: 15;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 4px 12px;
 }
 
 /* Inner wrapper so we can animate without overriding parent's translateX centering */
 .word-text .word-inner {
-  display: inline-block;
+  display: block;
+  width: 100%;
+  height: 100%;
+  line-height: 1.15;
+  font-size: clamp(6px, 1.2vw, 14px); /* smaller range */
+  font-weight: 800;
+  word-break: break-word;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0 4px;
 }
 
 .word-text.spinning {
@@ -511,6 +537,33 @@ body {
     gap: 20px;
     padding: 0 10px;
   }
+  /* Preview layout adjustments (mobile) */
+  #preview-container { 
+    padding: env(safe-area-inset-top, 12px) 0 env(safe-area-inset-bottom, 12px);
+  }
+  #preview-media-wrapper {
+    max-width: 100vw;
+    max-height: calc(100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 170px);
+    padding: 0 10px;
+  }
+  #preview-video, #preview-image {
+    width: 100%;
+    height: auto;
+    max-height: 100%;
+  }
+  .preview-actions {
+    position: fixed;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+    left: 50%;
+    transform: translateX(-50%);
+    gap: clamp(18px, 10vw, 46px);
+    pointer-events: none;
+  }
+  .preview-btn { 
+    width: clamp(54px, 18vw, 78px); 
+    height: clamp(54px, 18vw, 78px); 
+  }
+  .preview-action { min-width: auto; }
   
   .control-btn {
     min-width: 70px;
@@ -674,6 +727,40 @@ body {
   object-fit: contain;
   clip-path: inset(0);
   }
+}
+
+/* iOS specific preview safe-area handling */
+@supports (-webkit-touch-callout: none) {
+  #preview-container { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 10px); }
+  #preview-media-wrapper { 
+    max-height: calc(100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 190px); 
+  }
+  .preview-actions { 
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 18px); 
+  }
+}
+
+/* Landscape small-height devices (e.g., iPhone landscape) */
+@media (max-height: 500px) and (orientation: landscape) {
+  #preview-media-wrapper { 
+    max-height: calc(100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 130px); 
+  }
+  .preview-actions { 
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 8px); 
+    gap: clamp(14px, 6vw, 32px); 
+  }
+  .preview-btn { 
+    width: clamp(46px, 13vw, 64px); 
+    height: clamp(46px, 13vw, 64px); 
+  }
+  .preview-label { font-size: clamp(12px, 2.5vw, 14px); }
+}
+
+/* Ultra-narrow phones */
+@media (max-width: 360px) {
+  #preview-media-wrapper { max-width: 96vw; }
+  .preview-actions { gap: clamp(14px, 14vw, 30px); }
+  .preview-btn { width: clamp(48px, 22vw, 62px); height: clamp(48px, 22vw, 62px); }
 }
 
 /* Additional fix for iOS viewport issues */

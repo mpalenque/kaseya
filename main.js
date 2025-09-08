@@ -54,6 +54,10 @@ let faceMovementIntensity = 0; // Track how much the face is moving
 let smoothWordX = window.innerWidth * 0.5; // Smoothed X position
 let smoothWordY = window.innerHeight * 0.1; // Smoothed Y position
 const WORD_SMOOTHING_FACTOR = 0.15; // Lower = more smooth, higher = more responsive
+// Even smaller font sizes (fixed banner appearance in recording)
+const WORD_BANNER_MIN_FONT = 6; // px
+const WORD_BANNER_MAX_FONT = 14; // px
+const WORD_BANNER_LINE_HEIGHT = 1.15;
 
 // Performance / tuning constants
 const TARGET_RECORD_FPS = 30; // Aumentar fluidez de salida
@@ -202,6 +206,7 @@ function createPermanentWordElement() {
   permanentWordElement.style.transform = 'translateX(-50%)';
   permanentWordElement.style.zIndex = '15';
   document.body.appendChild(permanentWordElement);
+  autoFitWordBanner();
 }
 
 function updateWordPosition() {
@@ -376,6 +381,7 @@ async function startWordRoulette(shouldRecord = false) {
     currentWord = randomWord;
   const inner = permanentWordElement.querySelector('.word-inner');
   if (inner) inner.textContent = randomWord;
+  if (inner) autoFitWordBanner();
     
     spinTime += spinInterval;
     
@@ -396,6 +402,7 @@ function finalizeRoulette() {
   if (inner) inner.textContent = finalWord;
   permanentWordElement.className = 'word-text final';
   if (inner) inner.classList.add('final');
+  if (inner) autoFitWordBanner();
   
   // Keep the final effect for a bit, then return to normal
   setTimeout(() => {
@@ -535,8 +542,8 @@ function drawFooterOnCanvas(ctx, canvasWidth, canvasHeight) {
     return;
   }
   
-  // Scale footer proportionally to canvas size - make it more visible
-  const maxFooterWidth = canvasWidth * 0.4; // Increased to 40% of canvas width
+  // Scale footer proportionally to canvas size - doubled (was 40%, now 80%)
+  const maxFooterWidth = canvasWidth * 0.8;
   const scale = Math.min(maxFooterWidth / footerWidth, 1);
   const scaledWidth = footerWidth * scale;
   const scaledHeight = footerHeight * scale;
@@ -551,30 +558,45 @@ function drawFooterOnCanvas(ctx, canvasWidth, canvasHeight) {
 
 function drawWordOnCanvas(ctx, canvasWidth, canvasHeight) {
   if (!permanentWordElement) return;
-  
   const rect = permanentWordElement.getBoundingClientRect();
-  const text = permanentWordElement.textContent;
-  
-  // Set up text styling to match CSS
-  ctx.font = 'bold 40px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+  const inner = permanentWordElement.querySelector('.word-inner');
+  const text = inner ? inner.textContent : permanentWordElement.textContent;
+  const bannerX = rect.left;
+  const bannerY = rect.top;
+  const bannerW = rect.width;
+  const bannerH = rect.height;
+  const radius = 30;
+  // Background gradient approximation
+  const grad = ctx.createLinearGradient(bannerX, bannerY, bannerX + bannerW, bannerY + bannerH);
+  grad.addColorStop(0, 'rgba(138,43,226,0.95)');
+  grad.addColorStop(1, 'rgba(75,0,130,0.95)');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  roundRectPath(ctx, bannerX, bannerY, bannerW, bannerH, radius);
+  ctx.fill();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+  ctx.stroke();
+  // Text
+  const computed = window.getComputedStyle(inner || permanentWordElement);
+  ctx.font = `bold ${parseInt(computed.fontSize)}px -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  
-  // Draw text background (purple gradient-like)
-  const textWidth = ctx.measureText(text).width;
-  const padding = 30;
-  const bgWidth = textWidth + padding * 2;
-  const bgHeight = 60;
-  const bgX = rect.left + rect.width / 2 - bgWidth / 2;
-  const bgY = rect.top + rect.height / 2 - bgHeight / 2;
-  
-  // Background with rounded corners (simplified)
-  ctx.fillStyle = 'rgba(138, 43, 226, 0.95)';
-  ctx.fillRect(bgX, bgY, bgWidth, bgHeight);
-  
-  // Text with white color
-  ctx.fillStyle = 'white';
-  ctx.fillText(text, rect.left + rect.width / 2, rect.top + rect.height / 2);
+  ctx.fillStyle = '#fff';
+  ctx.fillText(text, bannerX + bannerW / 2, bannerY + bannerH / 2);
+}
+
+function roundRectPath(ctx, x, y, w, h, r) {
+  const rr = Math.min(r, w/2, h/2);
+  ctx.moveTo(x + rr, y);
+  ctx.lineTo(x + w - rr, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + rr);
+  ctx.lineTo(x + w, y + h - rr);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - rr, y + h);
+  ctx.lineTo(x + rr, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - rr);
+  ctx.lineTo(x, y + rr);
+  ctx.quadraticCurveTo(x, y, x + rr, y);
 }
 
 function beginVideoRecording() {
@@ -733,42 +755,41 @@ async function captureHTMLElements(ctx, canvasWidth, canvasHeight) {
   
   // Draw text (only if not in particles mode)
   if (!particlesMode && permanentWordElement && permanentWordElement.style.opacity !== '0') {
-    const textRect = permanentWordElement.getBoundingClientRect();
-    const textX = (textRect.left + textRect.width/2) * scaleX;
-    const textY = (textRect.top + textRect.height/2) * scaleY;
-    
-    // Get computed styles
-    const styles = window.getComputedStyle(permanentWordElement);
-    const fontSize = parseInt(styles.fontSize) * Math.min(scaleX, scaleY);
-    const text = permanentWordElement.textContent;
-    
-    // Draw text background
-    ctx.font = `bold ${fontSize}px Arial`;
-    const metrics = ctx.measureText(text);
-    const textWidth = metrics.width;
-    const textHeight = fontSize;
-    const padding = 20 * Math.min(scaleX, scaleY);
-    
-    // Background
-    const bgGradient = ctx.createLinearGradient(textX - textWidth/2, textY - textHeight/2, textX + textWidth/2, textY + textHeight/2);
-    bgGradient.addColorStop(0, 'rgba(138, 43, 226, 0.95)');
-    bgGradient.addColorStop(1, 'rgba(75, 0, 130, 0.95)');
-    
+    const rect = permanentWordElement.getBoundingClientRect();
+    const inner = permanentWordElement.querySelector('.word-inner');
+    const text = inner ? inner.textContent : permanentWordElement.textContent;
+    const bannerX = rect.left * scaleX;
+    const bannerY = rect.top * scaleY;
+    const bannerW = rect.width * scaleX;
+    const bannerH = rect.height * scaleY;
+    const radius = 30 * Math.min(scaleX, scaleY);
+    // Gradient background
+    const bgGradient = ctx.createLinearGradient(bannerX, bannerY, bannerX + bannerW, bannerY + bannerH);
+    bgGradient.addColorStop(0, 'rgba(138,43,226,0.95)');
+    bgGradient.addColorStop(1, 'rgba(75,0,130,0.95)');
     ctx.fillStyle = bgGradient;
     ctx.beginPath();
-    ctx.roundRect(textX - textWidth/2 - padding, textY - textHeight/2 - padding, textWidth + padding*2, textHeight + padding*2, 30);
+    roundRectPath(ctx, bannerX, bannerY, bannerW, bannerH, radius);
     ctx.fill();
-    
-    // Border
-    ctx.strokeStyle = 'rgba(255,255,255,0.8)';
     ctx.lineWidth = 3 * Math.min(scaleX, scaleY);
+    ctx.strokeStyle = 'rgba(255,255,255,0.8)';
     ctx.stroke();
-    
     // Text
-    ctx.fillStyle = 'white';
+    const computed = window.getComputedStyle(inner || permanentWordElement);
+    const fontSize = parseInt(computed.fontSize) * Math.min(scaleX, scaleY);
+    ctx.font = `bold ${fontSize}px -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif`;
+    ctx.fillStyle = '#fff';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(text, textX, textY);
+    ctx.fillText(text, bannerX + bannerW/2, bannerY + bannerH/2);
+  }
+
+  // Draw footer image (always include in recording) – mirrors composeFrame()
+  // We draw it last so it appears over the video just like in the live UI.
+  try {
+    drawFooterOnCanvas(ctx, canvasWidth, canvasHeight);
+  } catch (e) {
+    console.warn('Footer draw failed in captureHTMLElements:', e);
   }
 }
 
@@ -1151,3 +1172,27 @@ function stopParticlesAnimation() {
 
 // Start the application
 init();
+
+// Auto-fit logic: shrink font-size inside fixed banner until it fits height & width
+function autoFitWordBanner() {
+  if (!permanentWordElement) return;
+  const inner = permanentWordElement.querySelector('.word-inner');
+  if (!inner) return;
+  // Reset to max
+  inner.style.fontSize = WORD_BANNER_MAX_FONT + 'px';
+  const containerW = permanentWordElement.clientWidth - 8; // subtract small padding
+  const containerH = permanentWordElement.clientHeight - 8;
+  let current = WORD_BANNER_MAX_FONT;
+  // Iteratively reduce until fits
+  while (current > WORD_BANNER_MIN_FONT) {
+    const { scrollWidth, scrollHeight } = inner;
+    if (scrollWidth <= containerW && scrollHeight <= containerH) break;
+    current -= 2;
+    inner.style.fontSize = current + 'px';
+  }
+}
+
+// Re-fit on resize/orientation change
+window.addEventListener('resize', () => {
+  autoFitWordBanner();
+});
