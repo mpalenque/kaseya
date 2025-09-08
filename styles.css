@@ -312,6 +312,14 @@ body {
 .preview-label { font-family:'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-weight:800; font-size:20px; color:#fff; text-shadow:0 6px 22px rgba(0,0,0,.65); letter-spacing:.5px; user-select:none; }
 /* No media queries: identical rendering iPhone / desktop */
 
+/* iOS force identical desktop look (neutralize Safari quirks) */
+@supports (-webkit-touch-callout: none) {
+  .preview-btn { -webkit-tap-highlight-color: rgba(0,0,0,0); outline:none; }
+  .preview-icon { -webkit-user-drag:none; }
+  /* Prevent automatic image shrinking in some Safari viewport scenarios */
+  #preview-media-wrapper { transform: translateZ(0); -webkit-transform: translateZ(0); }
+}
+
 /* When preview open, hide bottomBar controls to avoid overlap */
 #preview-container.visible ~ #bottomBar, #preview-container.visible + #bottomBar { display: none; }
 
