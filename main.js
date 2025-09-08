@@ -36,8 +36,8 @@ let freezeActive = false; // when true, we stop updating dynamic content and kee
 let freezeFrame = null; // canvas holding frozen frame
 let compositeCanvasRef = null; // reference to composite recording canvas
 let stopTimeoutId = null; // scheduled delayed stop after release
-// Tail recording (cola de 2s después de soltar)
-const TAIL_RECORDING_MS = 2000; // duración extra tras soltar
+// Tail recording (cola de 3s después de soltar)
+const TAIL_RECORDING_MS = 3000; // duración extra tras soltar (+1s pedido)
 let freezeStartTime = 0; // timestamp de cuando se congela el frame
 let tailStopScheduled = false; // indica si la parada está programada pero aún no ejecutada
 
@@ -364,7 +364,7 @@ function finalizeRoulette() {
       permanentWordElement.className = 'word-text';
     }
     isSpinning = false;
-  // Nota: ya no detenemos la grabación aquí; se detiene 2s después de soltar el botón.
+  // Nota: ya no detenemos la grabación aquí; se detiene 3s después de soltar el botón.
   }, 3000);
 }
 
@@ -386,18 +386,18 @@ function startPress() {
 
 function endPress() {
   recorderContainer.classList.remove('active');
-  // If timer still pending -> short tap: do nothing
+  // Short tap: cancelar intención
   if (pressTimer) {
     clearTimeout(pressTimer);
     pressTimer = null;
-    return; // No action on short press
+    return;
   }
-  // If we were recording due to long press, freeze and schedule delayed stop
-  if (isRecording && !freezeActive) {
-    requestFreezeFrame();
+  // Long press activo: mantener grabación en vivo (sin freeze) por cola extra
+  if (isRecording) {
+    freezeActive = false; // asegurar draw continuo
+    freezeFrame = null;
     freezeStartTime = performance.now();
     tailStopScheduled = true;
-    // keep recording 2 more seconds
     if (stopTimeoutId) clearTimeout(stopTimeoutId);
     stopTimeoutId = setTimeout(() => {
       stopTimeoutId = null;
@@ -771,18 +771,15 @@ async function tryShareOrDownload(file, filename, forceDownload = false) {
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 5000);
   };
-  
-  // Try to share first, then fallback to download
   if (!forceDownload && navigator.canShare && navigator.canShare({ files: [file] })) {
     try {
       await navigator.share({ files: [file], title: filename });
+      return;
     } catch (err) {
       console.warn('Share canceled or failed:', err);
-      download();
     }
-  } else {
-    download();
   }
+  download();
 }
 
 // Particles system functions

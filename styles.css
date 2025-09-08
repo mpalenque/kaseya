@@ -267,64 +267,122 @@ body {
   display: flex;
 }
 
-#preview-video, #preview-image {
+/* Wrapper para medir y posicionar acciones */
+#preview-media-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   max-width: 90vw;
-  max-height: 80vh;
-  border-radius: 10px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  max-height: 82vh;
+}
+
+#preview-video, #preview-image {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 22px;
+  box-shadow: 0 20px 50px -10px rgba(0,0,0,0.6), 0 0 0 4px rgba(255,255,255,0.06);
+  outline: 0;
 }
 
 #preview-image {
   display: none;
 }
 
-.preview-controls {
+/* New preview actions (bottom) */
+.preview-actions {
   position: absolute;
-  top: 30px;
-  right: 30px;
+  left: 50%;
+  bottom: -95px; /* ajustado para tamaño menor */
+  transform: translateX(-50%);
   display: flex;
-  gap: 15px;
+  gap: clamp(40px, 6vw, 120px);
+  align-items: flex-start;
+  z-index: 210;
+  pointer-events: none; /* sólo botones clickeables */
 }
 
-.preview-controls button {
-  width: 50px;
-  height: 50px;
-  padding: 0;
-  margin: 0 10px;
-  background: linear-gradient(135deg, #8A2BE2, #4B0082);
-  color: white;
-  border: none;
+.preview-action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  min-width: 120px;
+}
+
+.preview-btn {
+  /* Base Figma size 150px; scale down below ~900px width */
+  width: 130px;
+  height: 130px;
   border-radius: 50%;
+  border: 6px solid #FFFFFF;
+  background: #000; /* base */
+  background-clip: padding-box;
+  box-shadow: 0 14px 40px -8px rgba(0,0,0,0.65), 0 0 0 6px rgba(255,255,255,0.08) inset;
   cursor: pointer;
-  font-size: 18px;
-  font-weight: bold;
-  transition: all 0.3s ease;
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  line-height: 1;
+  color: #fff;
+  transition: transform 0.25s ease, box-shadow 0.3s ease, filter 0.3s ease;
+  pointer-events: auto;
+  overflow: hidden;
 }
 
-.preview-controls button:hover {
-  background: rgba(138, 43, 226, 1);
-  transform: scale(1.1);
-  box-shadow: 0 6px 20px rgba(138, 43, 226, 0.5);
-  border-color: #fff;
+.preview-icon { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+
+.preview-btn:hover { transform: translateY(-10px) scale(1.08); box-shadow: 0 24px 50px -12px rgba(0,0,0,0.7), 0 0 0 6px rgba(255,255,255,0.14) inset; }
+
+.preview-btn:active {
+  transform: scale(0.94);
 }
 
-.preview-controls button:active {
-  transform: scale(0.95);
+/* Specific button color accents */
+/* Background subtle glow halos (matching strong saturated circles) */
+.preview-cancel { background: radial-gradient(circle at 40% 35%, #d41d28 0%, #7a1218 70%, #41070a 100%); }
+.preview-save { background: radial-gradient(circle at 40% 35%, #1f84dc 0%, #154072 70%, #0c243d 100%); }
+.preview-share { background: radial-gradient(circle at 40% 35%, #9d34ec 0%, #4f2375 70%, #241035 100%); }
+
+.preview-cancel:hover { filter: brightness(1.15); }
+.preview-save:hover { filter: brightness(1.15); }
+.preview-share:hover { filter: brightness(1.15); }
+
+.preview-label { font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-weight:800; font-size: clamp(20px, 3.2vw,30px); color:#fff; text-shadow:0 6px 22px rgba(0,0,0,0.65); letter-spacing:0.5px; user-select:none; }
+
+@media (max-width: 1100px) {
+  .preview-btn { width: 120px; height: 120px; }
+  .preview-actions { gap: clamp(28px,4.5vw,70px); bottom: -90px; }
 }
 
-#preview-close {
-  background: rgba(220, 53, 69, 0.9) !important;
-  box-shadow: 0 4px 15px rgba(220, 53, 69, 0.3) !important;
+@media (max-width: 900px) {
+  .preview-btn { width: 110px; height: 110px; }
+  .preview-actions { bottom: -85px; }
+  .preview-action { min-width: 100px; }
 }
 
-#preview-close:hover {
-  background: rgba(220, 53, 69, 1) !important;
-  box-shadow: 0 6px 20px rgba(220, 53, 69, 0.5) !important;
+@media (max-width: 768px) {
+  .preview-btn { width: 100px; height: 100px; border-width:4px; }
+  .preview-actions { bottom: -80px; gap: 28px; }
+  .preview-action { min-width: 90px; gap: 12px; }
+  .preview-label { font-size: clamp(16px,4.2vw,22px); }
 }
+
+@media (max-width: 560px) {
+  .preview-btn { width: 90px; height: 90px; }
+  .preview-actions { gap: 24px; bottom: -72px; }
+  .preview-action { min-width: 80px; }
+  .preview-label { font-size: clamp(14px,4.5vw,20px); }
+}
+
+@media (max-width: 420px) {
+  .preview-btn { width: 80px; height: 80px; border-width:3px; }
+  .preview-actions { gap: 20px; bottom: -60px; }
+  .preview-label { font-size: clamp(12px,4.8vw,16px); }
+}
+
+/* When preview open, hide bottomBar controls to avoid overlap */
+#preview-container.visible ~ #bottomBar, #preview-container.visible + #bottomBar { display: none; }
 
 /* Particles system */
 .particle {
