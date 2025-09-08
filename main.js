@@ -30,6 +30,16 @@ let progressInterval, recordRAF = 0;
 let currentFile = null;
 let animationId;
 let permanentWordElement = null;
+// Long-press / freeze recording behavior
+let pressTimer; // existing usage
+let freezeActive = false; // when true, we stop updating dynamic content and keep last frame
+let freezeFrame = null; // canvas holding frozen frame
+let compositeCanvasRef = null; // reference to composite recording canvas
+let stopTimeoutId = null; // scheduled delayed stop after release
+// Tail recording (cola de 2s después de soltar)
+const TAIL_RECORDING_MS = 2000; // duración extra tras soltar
+let freezeStartTime = 0; // timestamp de cuando se congela el frame
+let tailStopScheduled = false; // indica si la parada está programada pero aún no ejecutada
 
 // Particles system state
 let particlesMode = false;
@@ -354,49 +364,60 @@ function finalizeRoulette() {
       permanentWordElement.className = 'word-text';
     }
     isSpinning = false;
-    
-    // If we were recording, stop after word is finalized
-    if (isRecording) {
-      setTimeout(() => {
-        stopVideoRecording();
-      }, 1000); // Give 1 second to see the final result
-    }
+  // Nota: ya no detenemos la grabación aquí; se detiene 2s después de soltar el botón.
   }, 3000);
 }
 
-// Recording functionality (adapted from reference)
-let pressTimer;
-
+// Recording functionality (long-press only)
 function startPress() {
   if (isRecording || isSpinning) return;
   recorderContainer.classList.add('active');
+  // Start a timer; only when it elapses we begin recording
   pressTimer = setTimeout(() => {
     pressTimer = null;
-    handleRecordAction(); // Nueva función que maneja ambos modos
+    // Start recording ONLY (no roulette now per new requirement)
+    beginVideoRecording();
+    // Lanzar ruleta (visual draw) mientras graba, sin que pare la grabación automáticamente
+    if (!particlesMode) {
+      startWordRoulette(false); // false => no intenta iniciar grabación de nuevo
+    }
   }, 350); // long press threshold
 }
 
 function endPress() {
   recorderContainer.classList.remove('active');
+  // If timer still pending -> short tap: do nothing
   if (pressTimer) {
-    // Short press - también hace ruleta con grabación
     clearTimeout(pressTimer);
     pressTimer = null;
-    if (!isRecording && !isSpinning) {
-      handleRecordAction(); // Nueva función que maneja ambos modos
-    }
+    return; // No action on short press
+  }
+  // If we were recording due to long press, freeze and schedule delayed stop
+  if (isRecording && !freezeActive) {
+    requestFreezeFrame();
+    freezeStartTime = performance.now();
+    tailStopScheduled = true;
+    // keep recording 2 more seconds
+    if (stopTimeoutId) clearTimeout(stopTimeoutId);
+    stopTimeoutId = setTimeout(() => {
+      stopTimeoutId = null;
+      tailStopScheduled = false;
+      stopVideoRecording();
+    }, TAIL_RECORDING_MS);
   }
 }
 
-// Nueva función que maneja la grabación en ambos modos
-function handleRecordAction() {
-  if (particlesMode) {
-    // En modo partículas, solo graba sin ruleta
-    beginVideoRecording();
-  } else {
-    // En modo normal, hace ruleta con grabación
-    startWordRoulette(true);
+// Capture and freeze last composite frame (stop dynamic overlays immediately)
+function requestFreezeFrame() {
+  freezeActive = true;
+  if (compositeCanvasRef) {
+    freezeFrame = document.createElement('canvas');
+    freezeFrame.width = compositeCanvasRef.width;
+    freezeFrame.height = compositeCanvasRef.height;
+    const fctx = freezeFrame.getContext('2d');
+    fctx.drawImage(compositeCanvasRef, 0, 0);
   }
+  console.log('[Freeze] Frame congelado. Manteniendo grabación otros', TAIL_RECORDING_MS, 'ms');
 }
 
 function takePhoto() {
@@ -448,10 +469,17 @@ function beginVideoRecording() {
   recordStartTs = performance.now();
   startProgressLoop();
   recordedChunks = [];
+  // Reset freeze state for new session
+  freezeActive = false;
+  freezeFrame = null;
+  if (stopTimeoutId) { clearTimeout(stopTimeoutId); stopTimeoutId = null; }
+  tailStopScheduled = false;
+  freezeStartTime = 0;
   
   // Auto-stop after 8 seconds max
   setTimeout(() => {
     if (isRecording) {
+      tailStopScheduled = false; // Forzar parada inmediata al límite
       stopVideoRecording();
     }
   }, 8000);
@@ -461,23 +489,33 @@ function beginVideoRecording() {
 
 function beginCompositeRecording() {
   const composed = document.createElement('canvas');
-  composed.width = Math.min(canvas.width, 1280);
-  composed.height = Math.min(canvas.height, 720);
+  const { width: cw, height: ch } = computeCompositeDimensions();
+  composed.width = cw;
+  composed.height = ch;
   const ctx = composed.getContext('2d');
+  compositeCanvasRef = composed; // store reference
   const fps = 20;
   
   const draw = async () => {
     if (!isRecording) return;
-    
     ctx.clearRect(0, 0, composed.width, composed.height);
-    
-    // 1. Draw webcam background
-    if (webcamEl.videoWidth) {
-      drawWebcamCover(ctx, webcamEl, composed.width, composed.height);
+    if (freezeActive) {
+      // Draw stored frozen frame and continue until stop timeout
+      if (freezeFrame) ctx.drawImage(freezeFrame, 0, 0);
+    } else {
+      // Normal dynamic drawing
+      if (webcamEl.videoWidth) {
+        drawWebcamCover(ctx, webcamEl, composed.width, composed.height);
+      }
+      await captureHTMLElements(ctx, composed.width, composed.height);
+      // After drawing dynamic content, if freeze was requested mid-loop ensure we capture once
+      if (freezeActive && !freezeFrame) {
+        freezeFrame = document.createElement('canvas');
+        freezeFrame.width = composed.width;
+        freezeFrame.height = composed.height;
+        freezeFrame.getContext('2d').drawImage(composed, 0, 0);
+      }
     }
-    
-    // 2. Capture HTML elements (rings and text) using html2canvas-like approach
-    await captureHTMLElements(ctx, composed.width, composed.height);
     
     recordRAF = requestAnimationFrame(draw);
   };
@@ -494,6 +532,25 @@ function beginCompositeRecording() {
   recorder.onstop = onRecordingStop;
   recorder.start(500);
   draw();
+}
+
+// Compute responsive composite size matching current viewport aspect
+function computeCompositeDimensions() {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  // Target max dimension to balance quality & size
+  const MAX_W = 1280;
+  const MAX_H = 1280;
+  let w = vw;
+  let h = vh;
+  // Scale down uniformly if exceeding max constraints
+  const scale = Math.min(MAX_W / w, MAX_H / h, 1);
+  w = Math.round(w * scale);
+  h = Math.round(h * scale);
+  // Ensure even numbers (some encoders favor even dimensions)
+  if (w % 2) w -= 1;
+  if (h % 2) h -= 1;
+  return { width: Math.max(2, w), height: Math.max(2, h) };
 }
 
 async function captureHTMLElements(ctx, canvasWidth, canvasHeight) {
@@ -595,6 +652,14 @@ async function captureHTMLElements(ctx, canvasWidth, canvasHeight) {
 }
 
 function stopVideoRecording() {
+  // Guard para evitar parar antes de terminar la cola de 2s si está programada
+  if (tailStopScheduled) {
+    const elapsedTail = performance.now() - freezeStartTime;
+    if (elapsedTail < TAIL_RECORDING_MS) {
+      return; // aún no terminó la cola
+    }
+    tailStopScheduled = false; // permitir parada
+  }
   if (!isRecording) return;
   isRecording = false;
   recorderContainer.classList.remove('recording');
