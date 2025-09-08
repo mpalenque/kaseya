@@ -13,7 +13,7 @@ html, body, #app, video, canvas, button, .word-text, .preview-label, #preview-co
   -webkit-touch-callout: none !important;
 }
 
-img { -webkit-user-drag: none; user-drag: none; }
+img { -webkit-user-drag: none; }
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
