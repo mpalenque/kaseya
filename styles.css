@@ -88,12 +88,40 @@ body {
 .filter-wrapper[data-pos='left'] { left:30%; }
 .filter-wrapper[data-pos='center'] { left:50%; transform:translate(-50%,-50%) scale(1); opacity:1; }
 .filter-wrapper[data-pos='right'] { left:70%; }
-.filter-btn { width:100%; height:100%; border-radius:50%; border:4px solid rgba(255,255,255,0.85); background:rgba(255,255,255,0.12); color:#fff; font-size:32px; display:flex; align-items:center; justify-content:center; cursor:pointer; backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); transition:background .25s ease, border-color .25s ease, box-shadow .3s ease; }
+/* Desplazar un poco abajo los laterales para separarlos visualmente del central */
+.filter-wrapper[data-pos='left'],
+.filter-wrapper[data-pos='right'] { top:56%; }
+.filter-btn { width:100%; height:100%; border-radius:50%; border:4px solid rgba(255,255,255,0.85); background:rgba(255,255,255,0.12); color:#fff; font-size:32px; display:flex; align-items:center; justify-content:center; cursor:pointer; backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); transition:background .25s ease, border-color .25s ease, box-shadow .3s ease; position:relative; font-family:'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-weight:800; letter-spacing:.5px; }
+.filter-btn .btn-inner.text { line-height:1.0; font-size:14px; text-transform:uppercase; display:inline-block; text-align:center; }
+.btn-alterego .btn-inner { display:none; }
+.btn-dots .btn-inner { font-size:38px; line-height:1; }
+.btn-none .btn-inner { font-size:32px; }
+/* Botón Alter Ego basado en export Figma */
+.btn-alterego { background:transparent center/contain no-repeat url('assets/alterego-button.svg'); border:none; box-shadow:none; }
+.filter-wrapper.active .btn-alterego { background:transparent center/contain no-repeat url('assets/alterego-button.svg'); box-shadow:0 0 18px 0 rgba(170,59,255,0.55); }
+.btn-alterego:focus-visible { outline:2px solid #7945ff; outline-offset:4px; }
+.btn-dots { background:rgba(255,255,255,0.10); border-color:rgba(255,255,255,0.85); color:transparent; position:relative; overflow:hidden; }
+/* Mini círculos internos estilo filtro (radial-gradients) */
+.btn-dots::before { content:""; position:absolute; inset:8px; border-radius:50%; background:
+  radial-gradient(circle at 25% 30%, #00FFFF 0 6px, transparent 7px),
+  radial-gradient(circle at 68% 28%, #C77DFF 0 5px, transparent 6px),
+  radial-gradient(circle at 45% 62%, #7209B7 0 8px, transparent 9px),
+  radial-gradient(circle at 72% 68%, #36E5FF 0 5px, transparent 6px),
+  radial-gradient(circle at 30% 74%, #8A2BE2 0 6px, transparent 7px),
+  radial-gradient(circle at 58% 52%, #A45CFF 0 4px, transparent 5px);
+  opacity:0.9; filter:drop-shadow(0 0 4px rgba(0,0,0,0.4)); pointer-events:none; }
+/* Estado activo modo circles: vidrio + halo morado */
+.filter-wrapper.active[data-mode="circles"] .btn-dots { background:rgba(255,255,255,0.18); border-color:#AA3BFF; box-shadow:0 0 22px -2px rgba(170,59,255,0.55),0 0 0 6px rgba(170,59,255,0.25); }
+.filter-wrapper.active[data-mode="circles"] .btn-dots::before { opacity:1; filter:drop-shadow(0 0 6px rgba(170,59,255,0.55)); }
+.btn-none { background:rgba(255,255,255,0.10); color:#ffffff; }
+.filter-wrapper.active .btn-none { background:rgba(255,255,255,0.18); }
 .filter-btn:hover { background:rgba(255,255,255,0.28); }
+/* Estado activo general (fallback) si no hay estilos específicos */
 .filter-wrapper.active .filter-btn { background:#ff4757; border-color:#ff4757; box-shadow:0 0 22px -2px rgba(255,71,87,0.65),0 0 0 6px rgba(255,71,87,0.25); }
 /* Excepción: modo none (X) no debe ponerse rojo */
 .filter-wrapper.active[data-mode="none"] .filter-btn { background:rgba(255,255,255,0.12); border-color:rgba(255,255,255,0.85); box-shadow:none; }
-#filters-bar .recorder-container { position:absolute; inset:0; pointer-events:none; display:flex; align-items:center; justify-content:center; }
+.filter-wrapper.active[data-mode="draw"] .filter-btn { background:transparent; border-color:transparent; box-shadow:none; }
+#filters-bar .recorder-container { position:absolute; inset:0; pointer-events:auto; display:flex; align-items:center; justify-content:center; }
 #filters-bar .recorder-container .progress-container { pointer-events:none; }
 .filter-wrapper.active { z-index:10; }
 .filter-wrapper:not(.active) { z-index:1; }
@@ -105,6 +133,8 @@ body {
   .filter-btn { font-size:28px; }
   .filter-wrapper[data-pos='left'] { left:28%; }
   .filter-wrapper[data-pos='right'] { left:72%; }
+  .filter-wrapper[data-pos='left'],
+  .filter-wrapper[data-pos='right'] { top:57%; }
 }
 
 @media (min-width:1024px){
@@ -113,6 +143,8 @@ body {
   .filter-btn { font-size:34px; }
   .filter-wrapper[data-pos='left'] { left:32%; }
   .filter-wrapper[data-pos='right'] { left:68%; }
+  .filter-wrapper[data-pos='left'],
+  .filter-wrapper[data-pos='right'] { top:55%; }
 }
 
 /* Particles toggle button */
@@ -208,7 +240,7 @@ body {
 }
 
 .progress-bar {
-  stroke: #ff4757;
+  stroke: #AA3BFF;
   stroke-linecap: round;
   transform: rotate(-90deg);
   transform-origin: 18px 18px;
@@ -252,15 +284,17 @@ body {
 }
 
 .recorder-container.active #recorder-button {
-  background: rgba(255,255,255,0.3);
-  border-color: #ff4757;
+  background: rgba(170,59,255,0.25);
+  border-color: #AA3BFF;
   transform: scale(0.9);
+  box-shadow:0 0 18px -2px rgba(170,59,255,0.55),0 0 0 6px rgba(170,59,255,0.25);
 }
 
 .recorder-container.recording #recorder-button {
-  background: #ff4757;
-  border-color: #ff4757;
+  background: #AA3BFF;
+  border-color: #AA3BFF;
   animation: pulse 1s infinite;
+  box-shadow:0 0 25px -2px rgba(170,59,255,0.75),0 0 0 6px rgba(170,59,255,0.35);
 }
 
 @keyframes pulse {

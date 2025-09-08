@@ -38,14 +38,19 @@
     <div id="bottomBar">
       <div class="controls-container">
         <div id="filters-bar" aria-label="Filtros y grabación">
+          <!-- Orden: none (izquierda), circles (centro por defecto), draw/alter ego (derecha) -->
           <div class="filter-wrapper" data-mode="none" aria-label="Sin filtro">
-            <button class="filter-btn" data-mode="none">✕</button>
+            <button class="filter-btn btn-none" data-mode="none" data-label="none">
+              <span class="btn-inner">✕</span>
+            </button>
           </div>
-          <div class="filter-wrapper" data-mode="draw" aria-label="Draw / Word Roulette">
-            <button class="filter-btn" data-mode="draw">✏️</button>
+          <div class="filter-wrapper" data-mode="circles" aria-label="Dots Filter">
+            <button class="filter-btn btn-dots" data-mode="circles" data-label="dots">
+              <span class="btn-inner">●</span>
+            </button>
           </div>
-          <div class="filter-wrapper" data-mode="circles" aria-label="Círculos">
-            <button class="filter-btn" data-mode="circles">⭕</button>
+          <div class="filter-wrapper" data-mode="draw" aria-label="Alter Ego (Word Roulette)">
+            <button class="filter-btn btn-alterego" data-mode="draw" data-label="alter-ego" aria-label="Alter Ego"></button>
           </div>
           <!-- Recorder container se reposiciona dinámicamente dentro del wrapper activo -->
           <div class="recorder-container">

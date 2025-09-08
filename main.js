@@ -51,6 +51,9 @@ let lastFacePosition = { x: 0.5, y: 0.5 }; // Normalized face center position (0
 let lastFaceCenterPx = { x: window.innerWidth * 0.5, y: window.innerHeight * 0.5 }; // Screen-space center
 let lastFaceRadiusPx = Math.min(window.innerWidth, window.innerHeight) * 0.12; // Approx face radius in px
 let faceMovementIntensity = 0; // Track how much the face is moving
+// Rotación grupal en función de la posición de la cara (yaw y pitch simulados)
+let groupYaw = 0;   // rotación Y (giro izquierda/derecha)
+let groupPitch = 0; // rotación X (inclinación arriba/abajo)
 
 // Smoothing variables for word tracking
 let smoothWordX = window.innerWidth * 0.5; // Smoothed X position
@@ -950,12 +953,17 @@ function selectFilterMode(mode) {
   if (currentMode === mode) return;
   currentMode = mode;
   const wrappers = Array.from(document.querySelectorAll('#filters-bar .filter-wrapper'));
-  const order = ['none','draw','circles'];
+  const order = ['none','circles','draw'];
   // Normalize active
   wrappers.forEach(w => w.classList.remove('active'));
   const centerWrapper = wrappers.find(w => w.dataset.mode === mode);
   if (!centerWrapper) return;
   centerWrapper.classList.add('active');
+  // Ensure recorder container is appended inside active wrapper for proper pointer events
+  const rc = document.querySelector('#filters-bar .recorder-container');
+  if (rc && centerWrapper && rc.parentElement !== centerWrapper) {
+    centerWrapper.appendChild(rc);
+  }
   // Always show all: assign left/right cyclically
   const centerIndex = order.indexOf(mode);
   const leftIndex = (centerIndex - 1 + order.length) % order.length;
@@ -1012,7 +1020,10 @@ function createParticles() {
     dotsContainer.style.cssText = 'position:fixed;left:0;top:0;width:100%;height:100%;pointer-events:none;perspective:1400px;z-index:12;';
     document.body.appendChild(dotsContainer);
   }
-  specs.forEach((spec, idx) => {
+  const allSpecs = [...specs, ...specs.map(s => ({...s}))]; // duplicate for double amount
+  let megaCount = 0;
+  const MAX_MEGA = 2; // límite de mega círculos
+  allSpecs.forEach((spec, idx) => {
     const el = document.createElement('div');
     el.className = 'particle dot-asset';
     el.style.position = 'absolute';
@@ -1024,31 +1035,80 @@ function createParticles() {
     el.style.willChange = 'transform';
     el.dataset.depth = spec.depth;
     dotsContainer.appendChild(el);
+  // Factor de escala heterogéneo (más variedad de tamaños grandes/pequeños)
+  const sizeFactor = 0.45 + Math.random() * 1.8; // 0.45x a 2.25x
+  // Nueva dispersión radial y diferentes inercias
+  const inertia = 0.04 + Math.random() * 0.22; // rango más amplio
+  const dispersion = 1.20 + Math.random() * 0.9; // mayor separación potencial
+    const scatterAngle = Math.random() * Math.PI * 2;
+  // Reducimos ligeramente radios para acercar un poco los laterales
+  const scatterRadius = (spec.size > 200 ? 110 : spec.size > 100 ? 150 : 195) * (0.4 + Math.random()*0.75);
+    const scatterOffsetX = Math.cos(scatterAngle) * scatterRadius;
+    const scatterOffsetY = Math.sin(scatterAngle) * scatterRadius;
+    // Tamaño base inicial
+    let baseSize = spec.size * groupScale * sizeFactor;
+    let isMega = false;
+    // Mega círculos: 2x del más grande actual (que ya habíamos llevado a 1.4x) => 2.8x del original 294
+    if (spec.size === 294 && megaCount < MAX_MEGA && Math.random() < 0.22) {
+      baseSize = 294 * 1.4 * 2 * groupScale * (0.9 + Math.random()*0.2); // ~2.8x con ligera variación
+      isMega = true;
+      megaCount++;
+    } else if (spec.size === 294 && Math.random() < 0.38) {
+      // Super círculos (1.4x) cuando no son mega
+      baseSize = 294 * 1.4 * groupScale * (0.9 + Math.random()*0.2);
+    }
     particles.push({
       element: el,
       layoutX: spec.x,
       layoutY: spec.y,
-      baseSize: spec.size * groupScale,
+  baseSize,
+  isMega,
       depth: spec.depth,
-  currentDepth: spec.depth,
+      currentDepth: spec.depth,
       floatPhase: Math.random() * Math.PI * 2,
       floatSpeed: 0.004 + Math.random() * 0.003,
-      floatAmp: 10 + Math.random() * 12,
-  // Independent drift (beyond face tracking)
-  driftPhaseX: Math.random() * Math.PI * 2,
-  driftPhaseY: Math.random() * Math.PI * 2,
-  driftSpeedX: 0.0008 + Math.random() * 0.0008,
-  driftSpeedY: 0.0008 + Math.random() * 0.0008,
-  driftAmpX: 25 + Math.random() * 35,
-  driftAmpY: 25 + Math.random() * 35,
-  // Dynamic depth oscillation
-  depthPhase: Math.random() * Math.PI * 2,
-  depthSpeed: 0.0012 + Math.random() * 0.0012,
-  depthAmp:  (spec.size > 200 ? 55 : spec.size > 100 ? 80 : 95), // nearer (smaller) dots move a bit more in Z
+      floatAmp: 14 + Math.random() * 18,
+      driftPhaseX: Math.random() * Math.PI * 2,
+      driftPhaseY: Math.random() * Math.PI * 2,
+      driftSpeedX: 0.0006 + Math.random() * 0.0009,
+      driftSpeedY: 0.0006 + Math.random() * 0.0009,
+      driftAmpX: 35 + Math.random() * 55,
+      driftAmpY: 35 + Math.random() * 55,
+      depthPhase: Math.random() * Math.PI * 2,
+  depthSpeed: 0.0006 + Math.random() * 0.0018,
+  depthAmp: (spec.size > 200 ? 120 : spec.size > 100 ? 160 : 210),
       x: 0,
-      y: 0
+      y: 0,
+      smoothedX: 0,
+      smoothedY: 0,
+      inertia,
+      dispersion,
+      scatterOffsetX,
+      scatterOffsetY,
+      // Nueva variación radial (distancia base del centro)
+      radialFactor: (spec.size > 200 ? 0.75 : spec.size > 100 ? 1.0 : 1.35) * (0.7 + Math.random()*1.2),
+      radialPhase: Math.random()*Math.PI*2,
+      radialOscAmp: 0.15 + Math.random()*0.35,
+  radialOscSpeed: 0.0005 + Math.random()*0.0014,
+  vx: 0,
+  vy: 0,
+  vz: 0,
+  springK: 0.012 + Math.random()*0.018,
+  damping: 0.80 + Math.random()*0.12,
+  zPhase: Math.random()*Math.PI*2,
+  zSpeed: 0.0004 + Math.random()*0.0009,
+  zAmp: 60 + Math.random()*90,
+  tiltPhase: Math.random()*Math.PI*2,
+  tiltSpeed: 0.0005 + Math.random()*0.0012
     });
   });
+  // Después de crear todos: tomar 3 más frontales (mayor depth, es decir menos negativo) y duplicar su tamaño
+  // Filtramos evitando alterar mega ya extremadamente grandes para no romper composición
+  const frontMost = [...particles]
+    .sort((a,b)=> b.depth - a.depth) // depth -40 se vuelve primero
+    .filter(p=> !p.isMega)
+    .slice(0,3);
+  frontMost.forEach(p => { p.baseSize *= 2; });
 }
 
 // Helper function to check if a position is in a button zone
@@ -1084,51 +1144,83 @@ function startParticlesAnimation() {
     updateFacePosition();
     const faceX = lastFaceCenterPx.x;
     const faceY = lastFaceCenterPx.y;
-    const faceR = lastFaceRadiusPx * 0.9; // exclusion radius
+    const faceR = lastFaceRadiusPx * 0.9;
+    // Objetivos de rotación según la posición normalizada (más desplazamiento lateral => más yaw)
+    const targetYaw = (lastFacePosition.x - 0.5) * 0.9;   // ~±0.9 rad (~±51°)
+    const targetPitch = (lastFacePosition.y - 0.5) * 0.6; // ~±0.6 rad (~±34°)
+    // Suavizado
+    groupYaw += (targetYaw - groupYaw) * 0.07;
+    groupPitch += (targetPitch - groupPitch) * 0.07;
+    const cosY = Math.cos(groupYaw), sinY = Math.sin(groupYaw);
+    const cosX = Math.cos(groupPitch), sinX = Math.sin(groupPitch);
     particles.forEach((p, idx) => {
-      // Base target from layout (center layout around face)
       const layoutWidth = 630; const layoutHeight = 926;
-      const relX = p.layoutX - layoutWidth / 2;
-      const relY = p.layoutY - layoutHeight / 2;
-      // Dynamic depth oscillation
+      const relX = (p.layoutX - layoutWidth / 2);
+      const relY = (p.layoutY - layoutHeight / 2);
+      const relZ = p.depth * 0.5; // base Z comprimido
+      // Profundidad dinámica
       p.depthPhase += p.depthSpeed;
-      p.currentDepth = p.depth + Math.sin(p.depthPhase) * p.depthAmp; // updated Z
-      // Parallax factor from dynamic depth
-      const depthNorm = (p.currentDepth + 500) / 500; // adjust range for new amplitude
-      const parallax = 0.30 + 0.32 * depthNorm; // slightly wider span
-      // Increase base separation multiplier (0.55 -> 0.80) for more distance from face
-      let targetX = faceX + relX * (p.baseSize / 294) * 0.80 * parallax;
-      let targetY = faceY + relY * (p.baseSize / 294) * 0.80 * parallax;
-      // Floating motion (original subtle)
+      p.currentDepth = p.depth + Math.sin(p.depthPhase) * p.depthAmp;
+      const depthNorm = (p.currentDepth + 600) / 600; // normalización extendida
+  const parallax = 0.38 + 0.42 * depthNorm; // mayor rango de parallax
+  const baseSpread = 1.05; // reducido para acercar un poco
+      // Variación radial dinámica
+      p.radialPhase += p.radialOscSpeed;
+      const dynamicRadial = p.radialFactor + Math.sin(p.radialPhase)*p.radialOscAmp;
+      // Rotación grupal (primero yaw Y luego pitch X)
+      let x1 = relX * cosY + relZ * sinY;
+      let z1 = -relX * sinY + relZ * cosY;
+      let y1 = relY * cosX - z1 * sinX;
+      let z2 = relY * sinX + z1 * cosX; // z final tras pitch
+      const depthPerspective = 1 + (z2 / 1800); // ligera perspectiva
+      let targetX = faceX + (x1 * (p.baseSize / 294) * baseSpread * p.dispersion * parallax * dynamicRadial * depthPerspective) + p.scatterOffsetX;
+      let targetY = faceY + (y1 * (p.baseSize / 294) * baseSpread * p.dispersion * parallax * dynamicRadial * depthPerspective) + p.scatterOffsetY;
+      // Movimiento flotante
       p.floatPhase += p.floatSpeed;
-      const floatY = Math.sin(p.floatPhase + idx) * p.floatAmp;
-      const floatX = Math.cos(p.floatPhase * 0.8 + idx * 0.5) * p.floatAmp * 0.6;
-      targetX += floatX;
-      targetY += floatY;
-      // Independent drift (slow wandering not tied to face)
+      targetX += Math.cos(p.floatPhase * 0.85 + idx * 0.4) * p.floatAmp * 0.55;
+      targetY += Math.sin(p.floatPhase + idx) * p.floatAmp;
+      // Drift independiente
       p.driftPhaseX += p.driftSpeedX;
       p.driftPhaseY += p.driftSpeedY;
-      const driftX = Math.sin(p.driftPhaseX) * p.driftAmpX;
-      const driftY = Math.cos(p.driftPhaseY) * p.driftAmpY;
-      targetX += driftX;
-      targetY += driftY;
-      // Collision avoidance with wider margin
+      targetX += Math.sin(p.driftPhaseX) * p.driftAmpX;
+      targetY += Math.cos(p.driftPhaseY) * p.driftAmpY;
+      // Empuje mínimo para alejar de la cara (radio objetivo mayor)
       const dx = targetX - faceX;
       const dy = targetY - faceY;
-      const dist = Math.sqrt(dx*dx + dy*dy);
-      const minDist = faceR + p.baseSize/2 + 80; // more separation
-      if (dist < minDist) {
-        const push = (minDist - dist) + 10; // extra push for breathing room
-        const nx = (dx || 0.0001)/(dist || 1);
-        const ny = (dy || 0.0001)/(dist || 1);
+      let dist = Math.sqrt(dx*dx + dy*dy);
+      // Min dinámico (acercamos un poco globalmente reduciendo constantes)
+  const desiredMin = faceR + p.baseSize * (0.32 + p.radialFactor*0.26) + 55 + (p.radialFactor*38); // menos buffer
+      if (dist < desiredMin) {
+        const nx = (dx || 0.0001) / (dist || 1);
+        const ny = (dy || 0.0001) / (dist || 1);
+        const push = (desiredMin - dist) * 1.1;
         targetX += nx * push;
         targetY += ny * push;
+        dist = desiredMin;
       }
-      p.x = targetX;
-      p.y = targetY;
-      // Depth-based scale (slightly stronger)
-      const depthScale = 0.9 + (depthNorm * 0.45);
-      p.element.style.transform = `translate3d(${(p.x - p.baseSize/2)}px, ${(p.y - p.baseSize/2)}px, ${p.currentDepth}px) scale(${depthScale})`;
+      // Física elástica (resorte + amortiguación) hacia target
+      if (p.x === 0 && p.y === 0 && p.smoothedX === 0 && p.smoothedY === 0) {
+        p.x = targetX; p.y = targetY;
+      }
+      const ex = targetX - p.x;
+      const ey = targetY - p.y;
+      p.vx += ex * p.springK;
+      p.vy += ey * p.springK;
+      p.vx *= p.damping;
+      p.vy *= p.damping;
+      p.x += p.vx;
+      p.y += p.vy;
+      // Movimiento Z extra suave
+      p.zPhase += p.zSpeed;
+      const zOffset = Math.sin(p.zPhase) * p.zAmp; // oscilación adicional
+      const elasticDepth = p.currentDepth + zOffset + z2; // sumar rotación grupal
+      // Escala según profundidad e inercia (más lejanos un poco más chicos)
+      const depthScale = 0.55 + (depthNorm * 0.75);
+      // Pequeña inclinación simulada según velocidad
+      p.tiltPhase += p.tiltSpeed;
+      const tiltX = (p.vy * 0.002) + Math.sin(p.tiltPhase)*2;
+      const tiltY = (p.vx * -0.002) + Math.cos(p.tiltPhase*0.7)*2;
+      p.element.style.transform = `translate3d(${(p.x - p.baseSize/2)}px, ${(p.y - p.baseSize/2)}px, ${elasticDepth}px) scale(${depthScale}) rotateX(${tiltX}deg) rotateY(${tiltY}deg)`;
     });
     if (particlesMode) particleAnimationId = requestAnimationFrame(animate);
   };
