@@ -501,6 +501,8 @@ function composeFrame() {
   if (webcamEl.videoWidth) {
     drawWebcamCover(compositeCtx, webcamEl, compositeCanvas.width, compositeCanvas.height);
   }
+  // Draw violet top gradient (applied to capture)
+  drawTopGradient(compositeCtx, compositeCanvas.width, compositeCanvas.height);
   
   // Scale and draw overlay to match full viewport
   const overlayScaleX = window.innerWidth / canvas.width;
@@ -534,6 +536,21 @@ function drawWebcamCover(ctx, video, dw, dh) {
   const sy = Math.floor((vh - sh) / 2);
   
   ctx.drawImage(video, sx, sy, sw, sh, 0, 0, dw, dh);
+}
+
+function drawTopGradient(ctx, w, h) {
+  const gradientHeight = h * 0.33;
+  const grad = ctx.createLinearGradient(0, 0, 0, gradientHeight);
+  // Color #3E3CFF with varying opacities similar to CSS overlay
+  grad.addColorStop(0.0, 'rgba(62,60,255,0.78)');
+  grad.addColorStop(0.18, 'rgba(62,60,255,0.55)');
+  grad.addColorStop(0.48, 'rgba(62,60,255,0.28)');
+  grad.addColorStop(0.70, 'rgba(62,60,255,0.10)');
+  grad.addColorStop(1.0, 'rgba(62,60,255,0.0)');
+  ctx.save();
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, w, gradientHeight);
+  ctx.restore();
 }
 
 function drawFooterOnCanvas(ctx, canvasWidth, canvasHeight) {
@@ -714,6 +731,8 @@ function computeCompositeDimensions() {
 async function captureHTMLElements(ctx, canvasWidth, canvasHeight) {
   const scaleX = canvasWidth / window.innerWidth;
   const scaleY = canvasHeight / window.innerHeight;
+  // Apply top gradient each frame to composite stream
+  drawTopGradient(ctx, canvasWidth, canvasHeight);
   
   // Draw particles if in particles mode
   if (particlesMode && particles.length > 0) {
