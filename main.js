@@ -1109,6 +1109,16 @@ function createParticles() {
     .filter(p=> !p.isMega)
     .slice(0,3);
   frontMost.forEach(p => { p.baseSize *= 2; });
+  // Ultra círculo: uno que sea el doble del más grande actual (post duplicaciones frontales)
+  if (particles.length) {
+    let largest = particles.reduce((m,p)=> p.baseSize>m.baseSize? p : m, particles[0]);
+    // Evitar re-doblar si ya fue muy grande (limitar) usando factor máximo ~6x del original 294
+    const ORIGINAL_MAX = 294;
+    if (largest.baseSize < ORIGINAL_MAX * groupScale * 5.5) {
+      largest.baseSize *= 2; // duplicar
+      largest.isUltra = true;
+    }
+  }
 }
 
 // Helper function to check if a position is in a button zone
