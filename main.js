@@ -578,15 +578,20 @@ async function captureHTMLElements(ctx, canvasWidth, canvasHeight) {
   
   // Draw particles if in particles mode
   if (particlesMode && particles.length > 0) {
-    // Usar posiciones ya almacenadas para evitar layout thrash
-    const minScale = Math.min(scaleX, scaleY);
-    for (let i = 0; i < particles.length; i++) {
-      const p = particles[i];
-      const diameter = p.baseSize * minScale; // baseSize como aproximación al render dinámico
+    // Draw dot assets respecting depth (farther (more negative) first)
+    const ordered = [...particles].sort((a,b) => a.depth - b.depth);
+    for (const p of ordered) {
+      const drawX = p.x * scaleX;
+      const drawY = p.y * scaleY;
+      const size = p.baseSize * scaleX; // uniform scale
       ctx.save();
+      // Depth-based subtle alpha & blur hint (simulate atmospheric depth)
+      const depthFactor = (p.depth + 400) / 400; // 0..1
+      const alpha = 0.55 + depthFactor * 0.45; // near => more opaque
+      ctx.globalAlpha = alpha;
       ctx.fillStyle = p.element.style.backgroundColor || '#ffffff';
       ctx.beginPath();
-      ctx.arc((p.x * scaleX), (p.y * scaleY), (diameter/2), 0, Math.PI * 2);
+      ctx.arc(drawX - size/2, drawY - size/2, size/2, 0, Math.PI*2);
       ctx.fill();
       ctx.restore();
     }
@@ -811,79 +816,66 @@ function toggleParticlesMode() {
 }
 
 function createParticles() {
-  // Colors from Figma particles group
-  const figmaColors = [
-    '#00FFFF', // Cian brillante
-    '#C77DFF', // Morado claro
-    '#3D348B', // Azul oscuro/morado
-    '#7209B7'  // Morado medio
+  // === Figma Dots Assets implementation ===
+  // Layout extracted relative to frame (width 630, height 926)
+  // Columns: Large (294) at x=0 (y:0,316,632) | Medium (156) at x=346 (y:77,393,709) | Small (72) at x=558 (y:119,435,751)
+  // Depth strategy: smaller / brighter dots appear nearer (higher z), large farther (lower z)
+  clearParticles();
+  const layoutWidth = 630;
+  const layoutHeight = 926;
+  // Colors placeholder (update with exact Figma palette if different)
+  const DOT_COLORS = [
+    '#00FFFF', '#C77DFF', '#3D348B', // large column (top->bottom)
+    '#7209B7', '#5E2EA7', '#A45CFF', // medium column
+    '#36E5FF', '#8A2BE2', '#B794F4'  // small column
   ];
-  
-  const particleCount = 25;
-  
-  // Define button exclusion zones
-  const buttonZones = [
-    // Record button area (bottom center)
-    { x: window.innerWidth/2 - 100, y: window.innerHeight - 200, width: 200, height: 150 },
-    // Particles toggle button area (bottom left of center) 
-    { x: window.innerWidth/2 - 200, y: window.innerHeight - 200, width: 100, height: 150 }
+  const specs = [
+    { size:294, x:0,   y:0,   depth:-400, color:DOT_COLORS[0] },
+    { size:294, x:0,   y:316, depth:-380, color:DOT_COLORS[1] },
+    { size:294, x:0,   y:632, depth:-360, color:DOT_COLORS[2] },
+    { size:156, x:346, y:77,  depth:-220, color:DOT_COLORS[3] },
+    { size:156, x:346, y:393, depth:-200, color:DOT_COLORS[4] },
+    { size:156, x:346, y:709, depth:-180, color:DOT_COLORS[5] },
+    { size:72,  x:558, y:119, depth:-80,  color:DOT_COLORS[6] },
+    { size:72,  x:558, y:435, depth:-60,  color:DOT_COLORS[7] },
+    { size:72,  x:558, y:751, depth:-40,  color:DOT_COLORS[8] }
   ];
-  
-  for (let i = 0; i < particleCount; i++) {
-    const particle = document.createElement('div');
-    particle.className = 'particle';
-    
-    // Find a position that doesn't overlap with buttons or face area
-    let x, y;
-    let attempts = 0;
-  do {
-      x = Math.random() * window.innerWidth;
-      y = Math.random() * window.innerHeight;
-      attempts++;
-  } while (attempts < 200 && (isInButtonZone(x, y, buttonZones) || isInFaceArea(x, y)));
-    
-    // Create particle data object with much more varied sizes
-    const particleData = {
-      element: particle,
-      x: x,
-      y: y,
-      vx: (Math.random() - 0.5) * 0.8, // Slower, more gentle movement
-      vy: (Math.random() - 0.5) * 0.8,
-      baseSize: 15 + Math.random() * 80, // Much larger and more varied sizes (15-95px)
-      currentSize: 15 + Math.random() * 80,
-      targetSize: 15 + Math.random() * 80,
-      inertia: 0.96 + Math.random() * 0.03, // Much higher inertia for slower movement (0.96-0.99)
-      autonomousMovement: {
-        amplitude: 30 + Math.random() * 50, // Larger floating movement
-        frequency: 0.0005 + Math.random() * 0.001, // Much slower frequency
-        phaseX: Math.random() * Math.PI * 2,
-        phaseY: Math.random() * Math.PI * 2
-      },
-      faceInfluence: 0.00002 + Math.random() * 0.00008, // Much weaker influence
-      repulsionRadius: 120 + Math.random() * 180, // Increased base repulsion radius
-      colorIndex: Math.floor(Math.random() * figmaColors.length),
-      sizePhase: Math.random() * Math.PI * 2,
-      sizeSpeed: 0.002 + Math.random() * 0.003, // Much slower size changes
-      originalOpacity: 1.0, // Completely opaque - no transparency
-      time: 0,
-      buttonZones: buttonZones // Store reference for later use
-    };
-    
-    // Set visual properties
-    const color = figmaColors[particleData.colorIndex];
-    particle.style.backgroundColor = color;
-    particle.style.opacity = particleData.originalOpacity;
-    particle.style.width = particleData.currentSize + 'px';
-    particle.style.height = particleData.currentSize + 'px';
-    particle.style.left = particleData.x + 'px';
-    particle.style.top = particleData.y + 'px';
-    
-    // Remove CSS animations as we'll handle movement manually
-    particle.style.animation = 'none';
-    
-    document.body.appendChild(particle);
-    particles.push(particleData);
+  // Scale group relative to viewport (shrink if too big)
+  const baseScale = Math.min(window.innerWidth / (layoutWidth * 2.2), window.innerHeight / (layoutHeight * 1.8));
+  const groupScale = Math.max(0.28, Math.min(0.55, baseScale));
+  // Create container for 3D perspective
+  let dotsContainer = document.getElementById('dots-assets-container');
+  if (!dotsContainer) {
+    dotsContainer = document.createElement('div');
+    dotsContainer.id = 'dots-assets-container';
+    dotsContainer.style.cssText = 'position:fixed;left:0;top:0;width:100%;height:100%;pointer-events:none;perspective:1400px;z-index:12;';
+    document.body.appendChild(dotsContainer);
   }
+  specs.forEach((spec, idx) => {
+    const el = document.createElement('div');
+    el.className = 'particle dot-asset';
+    el.style.position = 'absolute';
+    el.style.width = spec.size * groupScale + 'px';
+    el.style.height = spec.size * groupScale + 'px';
+    el.style.borderRadius = '50%';
+    el.style.background = spec.color;
+    el.style.boxShadow = '0 0 25px -5px rgba(0,0,0,0.35)';
+    el.style.willChange = 'transform';
+    el.dataset.depth = spec.depth;
+    dotsContainer.appendChild(el);
+    particles.push({
+      element: el,
+      layoutX: spec.x,
+      layoutY: spec.y,
+      baseSize: spec.size * groupScale,
+      depth: spec.depth,
+      floatPhase: Math.random() * Math.PI * 2,
+      floatSpeed: 0.004 + Math.random() * 0.003,
+      floatAmp: 10 + Math.random() * 12,
+      x: 0,
+      y: 0
+    });
+  });
 }
 
 // Helper function to check if a position is in a button zone
@@ -915,166 +907,48 @@ function clearParticles() {
 }
 
 function startParticlesAnimation() {
-  const animateParticles = () => {
-    // Update face position for particle repulsion
+  const animate = (ts) => {
     updateFacePosition();
-    
-    particles.forEach((particleData, index) => {
-      const particle = particleData.element;
-      
-      // Increment internal time for autonomous movement
-      particleData.time += 1;
-      
-      // Autonomous movement - each particle moves in its own pattern
-      const autonomousX = Math.sin(particleData.time * particleData.autonomousMovement.frequency + particleData.autonomousMovement.phaseX) * particleData.autonomousMovement.amplitude;
-      const autonomousY = Math.cos(particleData.time * particleData.autonomousMovement.frequency + particleData.autonomousMovement.phaseY) * particleData.autonomousMovement.amplitude;
-      
-      // Add much gentler autonomous movement to velocity
-      particleData.vx += autonomousX * 0.00005; // Much gentler movement
-      particleData.vy += autonomousY * 0.00005;
-      
-      // Face repulsion and organic movement based on face movement
-      if (currentFaces.length > 0) {
-        const faceX = lastFaceCenterPx.x;
-        const faceY = lastFaceCenterPx.y;
-
-        const dx = particleData.x - faceX;
-        const dy = particleData.y - faceY;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-
-        // Strict inner exclusion: never allow particles inside this
-        const innerRadius = Math.max(120, lastFaceRadiusPx * 0.9);
-        const outerRadius = Math.max(220, lastFaceRadiusPx * 1.8);
-        if (distance < innerRadius) {
-          const normalizedDx = dx / (distance || 1);
-          const normalizedDy = dy / (distance || 1);
-          // Push out strongly
-          particleData.vx += normalizedDx * 0.2;
-          particleData.vy += normalizedDy * 0.2;
-          // Clamp position just outside innerRadius to avoid jitter
-          const safeDist = innerRadius + 2;
-          particleData.x = faceX + normalizedDx * safeDist;
-          particleData.y = faceY + normalizedDy * safeDist;
-        } else if (distance < outerRadius) {
-          // Soft repulsion within outer radius
-          const repulsionForce = (outerRadius - distance) / outerRadius;
-          const normalizedDx = dx / distance || 0;
-          const normalizedDy = dy / distance || 0;
-          particleData.vx += normalizedDx * repulsionForce * 0.06;
-          particleData.vy += normalizedDy * repulsionForce * 0.06;
-        }
-
-        // Additional repulsion based on original particle radius for extra safety
-        if (distance < particleData.repulsionRadius) {
-          const repulsionForce = (particleData.repulsionRadius - distance) / particleData.repulsionRadius;
-          const normalizedDx = dx / distance || 0;
-          const normalizedDy = dy / distance || 0;
-          particleData.vx += normalizedDx * repulsionForce * 0.03;
-          particleData.vy += normalizedDy * repulsionForce * 0.03;
-        }
-        
-        // More organic movement based on face movement intensity
-        if (faceMovementIntensity > 0.1) {
-          // Add swirling motion when face moves - but keep away from face
-          const swirl = Math.sin(particleData.time * 0.01 + index) * faceMovementIntensity * 0.002;
-          const wave = Math.cos(particleData.time * 0.008 + index * 0.5) * faceMovementIntensity * 0.001;
-          
-          // Apply swirl motion perpendicular to face direction
-          const perpX = -dy / (distance || 1);
-          const perpY = dx / (distance || 1);
-          
-          particleData.vx += perpX * swirl;
-          particleData.vy += perpY * wave;
-          
-          // Add some random organic movement away from face
-          particleData.vx += (Math.random() - 0.5) * faceMovementIntensity * 0.001;
-          particleData.vy += (Math.random() - 0.5) * faceMovementIntensity * 0.001;
-        }
-        
-        // Very subtle influence from face movement (not attraction)
-        particleData.vx += (Math.random() - 0.5) * particleData.faceInfluence;
-        particleData.vy += (Math.random() - 0.5) * particleData.faceInfluence;
-      } else {
-        // No face - more random movement
-        particleData.vx += (Math.random() - 0.5) * 0.003;
-        particleData.vy += (Math.random() - 0.5) * 0.003;
+    const faceX = lastFaceCenterPx.x;
+    const faceY = lastFaceCenterPx.y;
+    const faceR = lastFaceRadiusPx * 0.9; // exclusion radius
+    particles.forEach((p, idx) => {
+      // Base target from layout (center layout around face)
+      const layoutWidth = 630; const layoutHeight = 926;
+      const relX = p.layoutX - layoutWidth / 2;
+      const relY = p.layoutY - layoutHeight / 2;
+      // Parallax factor from depth (farther => smaller movement)
+      const depthNorm = (p.depth + 400) / 400; // 0 (far) .. 1 (near)
+      const parallax = 0.35 + 0.25 * depthNorm;
+      let targetX = faceX + relX * (p.baseSize / 294) * 0.55 * parallax;
+      let targetY = faceY + relY * (p.baseSize / 294) * 0.55 * parallax;
+      // Floating motion
+      p.floatPhase += p.floatSpeed;
+      const floatY = Math.sin(p.floatPhase + idx) * p.floatAmp;
+      const floatX = Math.cos(p.floatPhase * 0.8 + idx * 0.5) * p.floatAmp * 0.6;
+      targetX += floatX;
+      targetY += floatY;
+      // Collision avoidance with face circle
+      const dx = targetX - faceX;
+      const dy = targetY - faceY;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      const minDist = faceR + p.baseSize/2 + 24; // margin
+      if (dist < minDist) {
+        const push = (minDist - dist);
+        const nx = (dx || 0.0001)/ (dist || 1);
+        const ny = (dy || 0.0001)/ (dist || 1);
+        targetX += nx * push;
+        targetY += ny * push;
       }
-      
-      // Apply velocity
-      particleData.x += particleData.vx;
-      particleData.y += particleData.vy;
-      
-      // Apply inertia/friction
-      particleData.vx *= particleData.inertia;
-      particleData.vy *= particleData.inertia;
-      
-      // Button avoidance - push particles away from button zones
-      if (particleData.buttonZones) {
-        particleData.buttonZones.forEach(zone => {
-          const zoneX = zone.x + zone.width/2;
-          const zoneY = zone.y + zone.height/2;
-          const dx = particleData.x - zoneX;
-          const dy = particleData.y - zoneY;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-          const avoidanceRadius = Math.max(zone.width, zone.height) * 0.8;
-          
-          if (distance < avoidanceRadius && distance > 0) {
-            const repulsionForce = (avoidanceRadius - distance) / avoidanceRadius;
-            const normalizedDx = dx / distance;
-            const normalizedDy = dy / distance;
-            
-            particleData.vx += normalizedDx * repulsionForce * 0.02;
-            particleData.vy += normalizedDy * repulsionForce * 0.02;
-          }
-        });
-      }
-      
-      // Boundary wrapping with padding
-      const padding = 100;
-      if (particleData.x < -padding) particleData.x = window.innerWidth + padding;
-      if (particleData.x > window.innerWidth + padding) particleData.x = -padding;
-      if (particleData.y < -padding) particleData.y = window.innerHeight + padding;
-      if (particleData.y > window.innerHeight + padding) particleData.y = -padding;
-      
-      // Autonomous size changes - each particle pulses at its own rate
-      particleData.sizePhase += particleData.sizeSpeed;
-      
-      // Base size multiplier from autonomous pulsing - much more subtle
-      let baseSizeMultiplier = 0.9 + Math.sin(particleData.sizePhase) * 0.15; // Size varies from 0.75x to 1.05x (much more subtle)
-      
-      // Add very gentle scaling based on face movement intensity
-      let movementScaleMultiplier = 1.0;
-      if (currentFaces.length > 0) {
-        // Much more gentle scaling when face is moving
-        const maxIntensity = 20; // Higher threshold for more gentle effect
-        const normalizedIntensity = Math.min(faceMovementIntensity / maxIntensity, 1);
-        
-        // Scale varies very gently from 0.95x to 1.1x based on movement
-        movementScaleMultiplier = 0.95 + normalizedIntensity * 0.15;
-        
-        // Different particles react very slightly differently to movement
-        const particleReactivity = 0.8 + (index % 3) * 0.1; // Much more subtle reactivity
-        movementScaleMultiplier = 1 + (movementScaleMultiplier - 1) * particleReactivity;
-      }
-      
-      const finalSize = particleData.baseSize * baseSizeMultiplier * movementScaleMultiplier;
-      
-      // Apply visual changes
-      particle.style.left = particleData.x + 'px';
-      particle.style.top = particleData.y + 'px';
-      particle.style.width = finalSize + 'px';
-      particle.style.height = finalSize + 'px';
-      
-      // Opacity - completely opaque always
-      particle.style.opacity = 1.0;
+      p.x = targetX;
+      p.y = targetY;
+      // Depth scaling (slight) for perspective
+      const depthScale = 1 + (depthNorm * 0.25);
+      p.element.style.transform = `translate3d(${p.x - p.baseSize/2}px, ${p.y - p.baseSize/2}px, ${p.depth}px) scale(${depthScale})`;
     });
-    
-    if (particlesMode) {
-      particleAnimationId = requestAnimationFrame(animateParticles);
-    }
+    if (particlesMode) particleAnimationId = requestAnimationFrame(animate);
   };
-  
-  animateParticles();
+  animate();
 }
 
 function updateFacePosition() {

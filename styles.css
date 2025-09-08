@@ -334,6 +334,13 @@ body {
   box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
 }
 
+/* Figma Dots Assets (face-follow group) */
+.dot-asset {
+  mix-blend-mode: normal;
+  opacity: 1;
+  filter: saturate(110%) brightness(1.05);
+}
+
 /* Remove old size classes as we're handling sizes dynamically */
 
 /* Word display - hidden in particles mode */
