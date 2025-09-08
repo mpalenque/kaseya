@@ -23,7 +23,7 @@ const particlesToggle = document.getElementById('particles-toggle');
 // State variables
 let faceDetector;
 let currentFaces = [];
-let currentWord = 'Debugging Wizard 🧙'; // Palabra por defecto
+let currentWord = "What's my tech alter-ego?"; // Texto inicial antes del draw
 let isSpinning = false;
 let recorder, recordedChunks = [], isRecording = false, recordStartTs = 0;
 let progressInterval, recordRAF = 0;
@@ -50,6 +50,11 @@ let lastFaceCenterPx = { x: window.innerWidth * 0.5, y: window.innerHeight * 0.5
 let lastFaceRadiusPx = Math.min(window.innerWidth, window.innerHeight) * 0.12; // Approx face radius in px
 let faceMovementIntensity = 0; // Track how much the face is moving
 
+// Smoothing variables for word tracking
+let smoothWordX = window.innerWidth * 0.5; // Smoothed X position
+let smoothWordY = window.innerHeight * 0.1; // Smoothed Y position
+const WORD_SMOOTHING_FACTOR = 0.15; // Lower = more smooth, higher = more responsive
+
 // Performance / tuning constants
 const TARGET_RECORD_FPS = 30; // Aumentar fluidez de salida
 const DETECTION_INTERVAL_MS = 66; // ~15 FPS detección para reducir carga
@@ -74,11 +79,15 @@ const words = [
   'Ticket Slayer 🏴‍☠️'
 ];
 
+// Add footer image preloading
+let footerImage = null;
+
 // Initialize the application
 async function init() {
   try {
     await initCamera();
     await initFaceDetection();
+    await preloadFooterImage(); // Preload footer for recording
     setupEventListeners();
     createPermanentWordElement();
     startDetectionLoop();
@@ -121,6 +130,18 @@ async function initCamera() {
     console.error('Camera initialization failed:', error);
     throw error;
   }
+}
+
+async function preloadFooterImage() {
+  return new Promise((resolve, reject) => {
+    footerImage = new Image();
+    footerImage.onload = () => resolve();
+    footerImage.onerror = () => {
+      console.warn('Footer image failed to load, recording will continue without footer');
+      resolve(); // Continue even if footer fails
+    };
+    footerImage.src = 'footer.png';
+  });
 }
 
 async function initFaceDetection() {
@@ -186,6 +207,9 @@ function createPermanentWordElement() {
 function updateWordPosition() {
   if (!permanentWordElement || particlesMode) return;
 
+  let targetX = window.innerWidth * 0.5; // Default center
+  let targetY = window.innerHeight * 0.1; // Default top
+
   if (currentFaces.length > 0 && webcamEl.videoWidth && webcamEl.videoHeight) {
     const face = currentFaces[0];
     const b = face.boundingBox;
@@ -220,24 +244,32 @@ function updateWordPosition() {
     const screenX = offsetX + (faceCenterX / vw) * displayW;
     const screenTopY = offsetY + (faceTopY / vh) * displayH;
 
-  // Place word well above eyes: use 0.6 of face height above top, clamp to min margin
-  const faceHeightScreen = (b.height / vh) * displayH;
-  const desiredY = screenTopY - faceHeightScreen * 0.6; // 60% of face height above top
+    // Place word well above eyes: use 0.6 of face height above top, clamp to min margin
+    const faceHeightScreen = (b.height / vh) * displayH;
+    const desiredY = screenTopY - faceHeightScreen * 0.6; // 60% of face height above top
 
     const marginTop = 10; // px from top to avoid leaving the screen
     const clampedY = Math.max(marginTop, desiredY);
 
-    permanentWordElement.style.left = `${screenX}px`;
-    permanentWordElement.style.top = `${clampedY}px`;
-    permanentWordElement.style.transform = 'translateX(-50%)';
+    // Set target positions
+    targetX = screenX;
+    targetY = clampedY;
     permanentWordElement.style.opacity = '1';
   } else {
-    // No face: keep near top-center
-    permanentWordElement.style.left = '50%';
-    permanentWordElement.style.top = '10%';
-    permanentWordElement.style.transform = 'translateX(-50%)';
+    // No face: target default position
+    targetX = window.innerWidth * 0.5;
+    targetY = window.innerHeight * 0.1;
     permanentWordElement.style.opacity = '0.8';
   }
+
+  // Apply smooth interpolation
+  smoothWordX += (targetX - smoothWordX) * WORD_SMOOTHING_FACTOR;
+  smoothWordY += (targetY - smoothWordY) * WORD_SMOOTHING_FACTOR;
+
+  // Update element position with smoothed values
+  permanentWordElement.style.left = `${smoothWordX}px`;
+  permanentWordElement.style.top = `${smoothWordY}px`;
+  permanentWordElement.style.transform = 'translateX(-50%)';
 }
 
 function stopDetectionLoop() {
@@ -440,18 +472,35 @@ function takePhoto() {
 }
 
 function composeFrame() {
+  // Create canvas with full viewport dimensions to include footer
   const compositeCanvas = document.createElement('canvas');
-  compositeCanvas.width = canvas.width;
-  compositeCanvas.height = canvas.height;
+  compositeCanvas.width = window.innerWidth;
+  compositeCanvas.height = window.innerHeight;
   const compositeCtx = compositeCanvas.getContext('2d');
   
-  // Draw webcam video
+  console.log(`Composing frame with canvas size: ${compositeCanvas.width}x${compositeCanvas.height}`);
+  
+  // Draw webcam video covering the full viewport
   if (webcamEl.videoWidth) {
     drawWebcamCover(compositeCtx, webcamEl, compositeCanvas.width, compositeCanvas.height);
   }
   
-  // Draw overlay (face detection + words)
+  // Scale and draw overlay to match full viewport
+  const overlayScaleX = window.innerWidth / canvas.width;
+  const overlayScaleY = window.innerHeight / canvas.height;
+  compositeCtx.save();
+  compositeCtx.scale(overlayScaleX, overlayScaleY);
   compositeCtx.drawImage(canvas, 0, 0);
+  compositeCtx.restore();
+  
+  // Draw word text if visible and not in particles mode
+  if (permanentWordElement && !particlesMode && permanentWordElement.style.opacity !== '0') {
+    drawWordOnCanvas(compositeCtx, compositeCanvas.width, compositeCanvas.height);
+  }
+  
+  // ALWAYS draw footer at bottom - this is critical
+  console.log('Drawing footer on canvas...');
+  drawFooterOnCanvas(compositeCtx, compositeCanvas.width, compositeCanvas.height);
   
   return compositeCanvas;
 }
@@ -468,6 +517,64 @@ function drawWebcamCover(ctx, video, dw, dh) {
   const sy = Math.floor((vh - sh) / 2);
   
   ctx.drawImage(video, sx, sy, sw, sh, 0, 0, dw, dh);
+}
+
+function drawFooterOnCanvas(ctx, canvasWidth, canvasHeight) {
+  // Use preloaded footer image
+  if (!footerImage || !footerImage.complete) {
+    console.warn('Footer image not loaded, skipping footer in recording');
+    return;
+  }
+  
+  // Calculate footer position (bottom center)
+  const footerWidth = footerImage.naturalWidth || footerImage.width;
+  const footerHeight = footerImage.naturalHeight || footerImage.height;
+  
+  if (!footerWidth || !footerHeight) {
+    console.warn('Footer image dimensions not available');
+    return;
+  }
+  
+  // Scale footer proportionally to canvas size - make it more visible
+  const maxFooterWidth = canvasWidth * 0.4; // Increased to 40% of canvas width
+  const scale = Math.min(maxFooterWidth / footerWidth, 1);
+  const scaledWidth = footerWidth * scale;
+  const scaledHeight = footerHeight * scale;
+  
+  // Position at bottom center with some margin
+  const x = (canvasWidth - scaledWidth) / 2;
+  const y = canvasHeight - scaledHeight - 30; // 30px margin from bottom
+  
+  console.log(`Drawing footer at ${x}, ${y} with size ${scaledWidth}x${scaledHeight}`);
+  ctx.drawImage(footerImage, x, y, scaledWidth, scaledHeight);
+}
+
+function drawWordOnCanvas(ctx, canvasWidth, canvasHeight) {
+  if (!permanentWordElement) return;
+  
+  const rect = permanentWordElement.getBoundingClientRect();
+  const text = permanentWordElement.textContent;
+  
+  // Set up text styling to match CSS
+  ctx.font = 'bold 40px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  
+  // Draw text background (purple gradient-like)
+  const textWidth = ctx.measureText(text).width;
+  const padding = 30;
+  const bgWidth = textWidth + padding * 2;
+  const bgHeight = 60;
+  const bgX = rect.left + rect.width / 2 - bgWidth / 2;
+  const bgY = rect.top + rect.height / 2 - bgHeight / 2;
+  
+  // Background with rounded corners (simplified)
+  ctx.fillStyle = 'rgba(138, 43, 226, 0.95)';
+  ctx.fillRect(bgX, bgY, bgWidth, bgHeight);
+  
+  // Text with white color
+  ctx.fillStyle = 'white';
+  ctx.fillText(text, rect.left + rect.width / 2, rect.top + rect.height / 2);
 }
 
 function beginVideoRecording() {
@@ -869,9 +976,21 @@ function createParticles() {
       layoutY: spec.y,
       baseSize: spec.size * groupScale,
       depth: spec.depth,
+  currentDepth: spec.depth,
       floatPhase: Math.random() * Math.PI * 2,
       floatSpeed: 0.004 + Math.random() * 0.003,
       floatAmp: 10 + Math.random() * 12,
+  // Independent drift (beyond face tracking)
+  driftPhaseX: Math.random() * Math.PI * 2,
+  driftPhaseY: Math.random() * Math.PI * 2,
+  driftSpeedX: 0.0008 + Math.random() * 0.0008,
+  driftSpeedY: 0.0008 + Math.random() * 0.0008,
+  driftAmpX: 25 + Math.random() * 35,
+  driftAmpY: 25 + Math.random() * 35,
+  // Dynamic depth oscillation
+  depthPhase: Math.random() * Math.PI * 2,
+  depthSpeed: 0.0012 + Math.random() * 0.0012,
+  depthAmp:  (spec.size > 200 ? 55 : spec.size > 100 ? 80 : 95), // nearer (smaller) dots move a bit more in Z
       x: 0,
       y: 0
     });
@@ -917,34 +1036,45 @@ function startParticlesAnimation() {
       const layoutWidth = 630; const layoutHeight = 926;
       const relX = p.layoutX - layoutWidth / 2;
       const relY = p.layoutY - layoutHeight / 2;
-      // Parallax factor from depth (farther => smaller movement)
-      const depthNorm = (p.depth + 400) / 400; // 0 (far) .. 1 (near)
-      const parallax = 0.35 + 0.25 * depthNorm;
-      let targetX = faceX + relX * (p.baseSize / 294) * 0.55 * parallax;
-      let targetY = faceY + relY * (p.baseSize / 294) * 0.55 * parallax;
-      // Floating motion
+      // Dynamic depth oscillation
+      p.depthPhase += p.depthSpeed;
+      p.currentDepth = p.depth + Math.sin(p.depthPhase) * p.depthAmp; // updated Z
+      // Parallax factor from dynamic depth
+      const depthNorm = (p.currentDepth + 500) / 500; // adjust range for new amplitude
+      const parallax = 0.30 + 0.32 * depthNorm; // slightly wider span
+      // Increase base separation multiplier (0.55 -> 0.80) for more distance from face
+      let targetX = faceX + relX * (p.baseSize / 294) * 0.80 * parallax;
+      let targetY = faceY + relY * (p.baseSize / 294) * 0.80 * parallax;
+      // Floating motion (original subtle)
       p.floatPhase += p.floatSpeed;
       const floatY = Math.sin(p.floatPhase + idx) * p.floatAmp;
       const floatX = Math.cos(p.floatPhase * 0.8 + idx * 0.5) * p.floatAmp * 0.6;
       targetX += floatX;
       targetY += floatY;
-      // Collision avoidance with face circle
+      // Independent drift (slow wandering not tied to face)
+      p.driftPhaseX += p.driftSpeedX;
+      p.driftPhaseY += p.driftSpeedY;
+      const driftX = Math.sin(p.driftPhaseX) * p.driftAmpX;
+      const driftY = Math.cos(p.driftPhaseY) * p.driftAmpY;
+      targetX += driftX;
+      targetY += driftY;
+      // Collision avoidance with wider margin
       const dx = targetX - faceX;
       const dy = targetY - faceY;
       const dist = Math.sqrt(dx*dx + dy*dy);
-      const minDist = faceR + p.baseSize/2 + 24; // margin
+      const minDist = faceR + p.baseSize/2 + 80; // more separation
       if (dist < minDist) {
-        const push = (minDist - dist);
-        const nx = (dx || 0.0001)/ (dist || 1);
-        const ny = (dy || 0.0001)/ (dist || 1);
+        const push = (minDist - dist) + 10; // extra push for breathing room
+        const nx = (dx || 0.0001)/(dist || 1);
+        const ny = (dy || 0.0001)/(dist || 1);
         targetX += nx * push;
         targetY += ny * push;
       }
       p.x = targetX;
       p.y = targetY;
-      // Depth scaling (slight) for perspective
-      const depthScale = 1 + (depthNorm * 0.25);
-      p.element.style.transform = `translate3d(${p.x - p.baseSize/2}px, ${p.y - p.baseSize/2}px, ${p.depth}px) scale(${depthScale})`;
+      // Depth-based scale (slightly stronger)
+      const depthScale = 0.9 + (depthNorm * 0.45);
+      p.element.style.transform = `translate3d(${(p.x - p.baseSize/2)}px, ${(p.y - p.baseSize/2)}px, ${p.currentDepth}px) scale(${depthScale})`;
     });
     if (particlesMode) particleAnimationId = requestAnimationFrame(animate);
   };
