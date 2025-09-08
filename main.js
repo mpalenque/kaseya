@@ -50,6 +50,12 @@ let lastFaceCenterPx = { x: window.innerWidth * 0.5, y: window.innerHeight * 0.5
 let lastFaceRadiusPx = Math.min(window.innerWidth, window.innerHeight) * 0.12; // Approx face radius in px
 let faceMovementIntensity = 0; // Track how much the face is moving
 
+// Performance / tuning constants
+const TARGET_RECORD_FPS = 30; // Aumentar fluidez de salida
+const DETECTION_INTERVAL_MS = 66; // ~15 FPS detección para reducir carga
+let lastDetectionTs = 0;
+let lastCompositeFrameTs = 0;
+
 // Word pool for the roulette
 const words = [
   'Debugging Wizard 🧙',
@@ -144,16 +150,17 @@ async function initFaceDetection() {
 
 function startDetectionLoop() {
   async function detectFaces() {
-    if (webcamEl.videoWidth > 0 && webcamEl.videoHeight > 0) {
+    const now = performance.now();
+    if (webcamEl.videoWidth > 0 && webcamEl.videoHeight > 0 && (now - lastDetectionTs) >= DETECTION_INTERVAL_MS) {
+      lastDetectionTs = now;
       try {
-        const results = await faceDetector.detectForVideo(webcamEl, performance.now());
+        const results = await faceDetector.detectForVideo(webcamEl, now);
         currentFaces = results.detections || [];
-        drawOverlay();
       } catch (error) {
-        console.warn('Face detection error:', error);
+        // Silenciar errores intermitentes para mantener FPS
       }
+      drawOverlay();
     }
-    
     animationId = requestAnimationFrame(detectFaces);
   }
   
@@ -494,10 +501,22 @@ function beginCompositeRecording() {
   composed.height = ch;
   const ctx = composed.getContext('2d');
   compositeCanvasRef = composed; // store reference
-  const fps = 20;
+  const fps = TARGET_RECORD_FPS; // subir a 30fps para fluidez
+  // NOTE Performance rationale:
+  // - Antes: detection y composite cada RAF (~60) causando CPU alta + MediaRecorder 20fps => stutter
+  // - Ahora: face detection throttled (~15fps) suficiente para UX, libera main thread
+  // - Composite canvas limitado a 30fps target estable (frame pacing manual)
+  // - Partículas: se evita getBoundingClientRect por partícula en cada frame de captura
   
   const draw = async () => {
     if (!isRecording) return;
+    const now = performance.now();
+    const frameInterval = 1000 / fps;
+    if (now - lastCompositeFrameTs < frameInterval) {
+      recordRAF = requestAnimationFrame(draw);
+      return;
+    }
+    lastCompositeFrameTs = now;
     ctx.clearRect(0, 0, composed.width, composed.height);
     if (freezeActive) {
       // Draw stored frozen frame and continue until stop timeout
@@ -523,7 +542,7 @@ function beginCompositeRecording() {
   const stream = composed.captureStream(fps);
   recorder = new MediaRecorder(stream, { 
     mimeType: pickSupportedMime(),
-    videoBitsPerSecond: 3000000
+  videoBitsPerSecond: 4500000 // un poco más alto para suavizar compresión a 30fps
   });
   
   recorder.ondataavailable = e => { 
@@ -559,28 +578,18 @@ async function captureHTMLElements(ctx, canvasWidth, canvasHeight) {
   
   // Draw particles if in particles mode
   if (particlesMode && particles.length > 0) {
-    particles.forEach(particleData => {
-      const particle = particleData.element;
-      const rect = particle.getBoundingClientRect();
-      
-      const x = rect.left * scaleX;
-      const y = rect.top * scaleY;
-      const diameter = rect.width * Math.min(scaleX, scaleY); // Use minimum scale to maintain aspect ratio
-      
-      // Get computed styles
-      const styles = window.getComputedStyle(particle);
-      const backgroundColor = styles.backgroundColor;
-      const opacity = styles.opacity;
-      
-      // Draw particle as perfect circle
+    // Usar posiciones ya almacenadas para evitar layout thrash
+    const minScale = Math.min(scaleX, scaleY);
+    for (let i = 0; i < particles.length; i++) {
+      const p = particles[i];
+      const diameter = p.baseSize * minScale; // baseSize como aproximación al render dinámico
       ctx.save();
-      ctx.globalAlpha = 1.0; // Always fully opaque
-      ctx.fillStyle = backgroundColor;
+      ctx.fillStyle = p.element.style.backgroundColor || '#ffffff';
       ctx.beginPath();
-      ctx.arc(x + (rect.width * scaleX)/2, y + (rect.height * scaleY)/2, diameter/2, 0, Math.PI * 2);
+      ctx.arc((p.x * scaleX), (p.y * scaleY), (diameter/2), 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
-    });
+    }
   }
   
   // Draw rings
