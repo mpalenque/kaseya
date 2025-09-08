@@ -72,20 +72,20 @@ let lastCompositeFrameTs = 0;
 
 // Word pool for the roulette
 const words = [
-  'Debugging Wizard 🧙',
-  'Captain Stack Overflow 🧠',
-  'Deadline Denier ⏳',
-  'Sir Talks-a-Lot (in Meetings) 🎙️',
-  'CSS Sorcerer 🎨',
-  'Network Ninja ⚡',
-  'Tab Hoarder 🧾',
-  'Mad Dev Scientist 🧪',
-  'The Code Poet 🖋️',
-  'WiFi Wizard 📶',
-  'Cloud Prophet ☁️',
-  'Meme Lord 👑',
-  'Tech Legend 🤘',
-  'Ticket Slayer 🏴‍☠️'
+  'Debugging Wizard',
+  'Captain Stack Overflow',
+  'Deadline Denier',
+  'Sir Talks-a-Lot (in Meetings)',
+  'CSS Sorcerer',
+  'Network Ninja',
+  'Tab Hoarder',
+  'Mad Dev Scientist',
+  'The Code Poet',
+  'WiFi Wizard',
+  'Cloud Prophet',
+  'Meme Lord',
+  'Tech Legend',
+  'Ticket Slayer'
 ];
 
 // Add footer image preloading
