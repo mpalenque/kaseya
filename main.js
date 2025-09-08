@@ -18,7 +18,9 @@ const previewClose = document.getElementById('preview-close');
 const previewShare = document.getElementById('preview-share');
 const previewDownload = document.getElementById('preview-download');
 const wordDisplay = document.getElementById('word-display');
-const particlesToggle = document.getElementById('particles-toggle');
+// New filter buttons logic
+const filtersBar = document.getElementById('filters-bar');
+let currentMode = 'none'; // none | draw | circles
 
 // State variables
 let faceDetector;
@@ -310,8 +312,13 @@ function drawWord(x, y) {
 }
 
 function setupEventListeners() {
-  // Particles toggle button
-  particlesToggle.addEventListener('click', toggleParticlesMode);
+  // Filter buttons (delegation)
+  filtersBar.addEventListener('click', (e) => {
+    const btn = e.target.closest('.filter-btn');
+    if (!btn) return;
+    const mode = btn.dataset.mode;
+    selectFilterMode(mode);
+  });
   
   // Recorder button (hace ruleta Y graba automáticamente)
   recorderButton.addEventListener('pointerdown', startPress);
@@ -423,9 +430,9 @@ function startPress() {
     pressTimer = null;
     // Start recording ONLY (no roulette now per new requirement)
     beginVideoRecording();
-    // Lanzar ruleta (visual draw) mientras graba, sin que pare la grabación automáticamente
-    if (!particlesMode) {
-      startWordRoulette(false); // false => no intenta iniciar grabación de nuevo
+    // Según modo
+    if (currentMode === 'draw') {
+      startWordRoulette(false);
     }
   }, 350); // long press threshold
 }
@@ -927,21 +934,47 @@ async function tryShareOrDownload(file, filename, forceDownload = false) {
 // Particles system functions
 function toggleParticlesMode() {
   particlesMode = !particlesMode;
-  
   if (particlesMode) {
-    // Enable particles mode
-    particlesToggle.classList.add('active');
     document.body.classList.add('particles-mode');
     createParticles();
     startParticlesAnimation();
   } else {
-    // Disable particles mode
-    particlesToggle.classList.remove('active');
     document.body.classList.remove('particles-mode');
     clearParticles();
     stopParticlesAnimation();
   }
 }
+
+function selectFilterMode(mode) {
+  if (!['none','draw','circles'].includes(mode)) return;
+  if (currentMode === mode) return;
+  currentMode = mode;
+  const wrappers = Array.from(document.querySelectorAll('#filters-bar .filter-wrapper'));
+  const order = ['none','draw','circles'];
+  // Normalize active
+  wrappers.forEach(w => w.classList.remove('active'));
+  const centerWrapper = wrappers.find(w => w.dataset.mode === mode);
+  if (!centerWrapper) return;
+  centerWrapper.classList.add('active');
+  // Always show all: assign left/right cyclically
+  const centerIndex = order.indexOf(mode);
+  const leftIndex = (centerIndex - 1 + order.length) % order.length;
+  const rightIndex = (centerIndex + 1) % order.length;
+  wrappers.forEach(w => {
+    if (w.dataset.mode === mode) w.dataset.pos = 'center';
+    else if (w.dataset.mode === order[leftIndex]) w.dataset.pos = 'left';
+    else if (w.dataset.mode === order[rightIndex]) w.dataset.pos = 'right';
+  });
+  if (permanentWordElement) {
+    permanentWordElement.style.display = mode === 'draw' ? 'flex' : 'none';
+  }
+  // Particles only on circles
+  if (mode === 'circles') { if (!particlesMode) toggleParticlesMode(); }
+  else if (particlesMode) { toggleParticlesMode(); }
+  if (mode !== 'draw') isSpinning = false;
+}
+
+document.addEventListener('DOMContentLoaded', () => { selectFilterMode('circles'); });
 
 function createParticles() {
   // === Figma Dots Assets implementation ===

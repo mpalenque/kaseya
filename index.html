@@ -37,16 +37,27 @@
     <!-- Controls -->
     <div id="bottomBar">
       <div class="controls-container">
-        <button id="particles-toggle" type="button" aria-label="Toggle particles mode">✨</button>
-        <div class="recorder-container">
-          <div class="progress-container">
-            <svg width="100%" height="100%" viewBox="0 0 36 36">
-              <circle class="progress-track" cx="18" cy="18" r="16" />
-              <circle class="progress-bar" cx="18" cy="18" r="16" />
-              <circle class="loading-circle" cx="18" cy="18" r="16" />
-            </svg>
+        <div id="filters-bar" aria-label="Filtros y grabación">
+          <div class="filter-wrapper" data-mode="none" aria-label="Sin filtro">
+            <button class="filter-btn" data-mode="none">✕</button>
           </div>
-          <button id="recorder-button" type="button" aria-label="Record"></button>
+          <div class="filter-wrapper" data-mode="draw" aria-label="Draw / Word Roulette">
+            <button class="filter-btn" data-mode="draw">✏️</button>
+          </div>
+          <div class="filter-wrapper" data-mode="circles" aria-label="Círculos">
+            <button class="filter-btn" data-mode="circles">⭕</button>
+          </div>
+          <!-- Recorder container se reposiciona dinámicamente dentro del wrapper activo -->
+          <div class="recorder-container">
+            <div class="progress-container">
+              <svg width="100%" height="100%" viewBox="0 0 36 36">
+                <circle class="progress-track" cx="18" cy="18" r="16" />
+                <circle class="progress-bar" cx="18" cy="18" r="16" />
+                <circle class="loading-circle" cx="18" cy="18" r="16" />
+              </svg>
+            </div>
+            <button id="recorder-button" type="button" aria-label="Record"></button>
+          </div>
         </div>
       </div>
     </div>
