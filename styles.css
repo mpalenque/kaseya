@@ -302,107 +302,15 @@ body {
   pointer-events: none; /* sólo botones clickeables */
 }
 
-.preview-action {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 18px;
-  min-width: 120px;
-}
-
-.preview-btn {
-  /* Base Figma size 150px; scale down below ~900px width */
-  width: 130px;
-  height: 130px;
-  border-radius: 50%;
-  border: 6px solid #FFFFFF;
-  background: #000; /* base */
-  background-clip: padding-box;
-  box-shadow: 0 14px 40px -8px rgba(0,0,0,0.65), 0 0 0 6px rgba(255,255,255,0.08) inset;
-  cursor: pointer;
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  transition: transform 0.25s ease, box-shadow 0.3s ease, filter 0.3s ease;
-  pointer-events: auto;
-  overflow: hidden;
-}
-
-.preview-icon { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
-/* Mejoras de rendering cross-device */
-.preview-btn, .preview-icon { -webkit-user-select: none; user-select: none; }
-.preview-icon { image-rendering: -webkit-optimize-contrast; }
-
-.preview-btn:hover { transform: translateY(-10px) scale(1.08); box-shadow: 0 24px 50px -12px rgba(0,0,0,0.7), 0 0 0 6px rgba(255,255,255,0.14) inset; }
-
-.preview-btn:active {
-  transform: scale(0.94);
-}
-
-/* Specific button color accents */
-/* Background subtle glow halos (matching strong saturated circles) */
-.preview-cancel { background: radial-gradient(circle at 40% 35%, #d41d28 0%, #7a1218 70%, #41070a 100%); }
-.preview-save { background: radial-gradient(circle at 40% 35%, #1f84dc 0%, #154072 70%, #0c243d 100%); }
-.preview-share { background: radial-gradient(circle at 40% 35%, #9d34ec 0%, #4f2375 70%, #241035 100%); }
-
-.preview-cancel:hover { filter: brightness(1.15); }
-.preview-save:hover { filter: brightness(1.15); }
-.preview-share:hover { filter: brightness(1.15); }
-
-.preview-label { font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-weight:800; font-size: clamp(20px, 3.2vw,30px); color:#fff; text-shadow:0 6px 22px rgba(0,0,0,0.65); letter-spacing:0.5px; user-select:none; }
-
-@media (max-width: 1100px) {
-  .preview-btn { width: 120px; height: 120px; }
-  .preview-actions { gap: clamp(28px,4.5vw,70px); bottom: -90px; }
-}
-
-@media (max-width: 900px) {
-  .preview-btn { width: 110px; height: 110px; }
-  .preview-actions { bottom: -85px; }
-  .preview-action { min-width: 100px; }
-}
-
-@media (max-width: 768px) {
-  .preview-btn { width: 100px; height: 100px; border-width:4px; }
-  .preview-actions { bottom: -80px; gap: 28px; }
-  .preview-action { min-width: 90px; gap: 12px; }
-  .preview-label { font-size: clamp(16px,4.2vw,22px); }
-}
-
-@media (max-width: 560px) {
-  .preview-btn { width: 90px; height: 90px; }
-  .preview-actions { gap: 24px; bottom: -72px; }
-  .preview-action { min-width: 80px; }
-  .preview-label { font-size: clamp(14px,4.5vw,20px); }
-}
-
-@media (max-width: 420px) {
-  .preview-btn { width: 80px; height: 80px; border-width:3px; }
-  .preview-actions { gap: 20px; bottom: -60px; }
-  .preview-label { font-size: clamp(12px,4.8vw,16px); }
-}
-
-/* ================= iOS Safari override: mantener look desktop en iPhone ================= */
-@supports (-webkit-touch-callout: none) {
-  /* For typical iPhone widths we keep desktop sizing so icons look identical */
-  @media (max-width: 820px) {
-    .preview-btn { width:130px !important; height:130px !important; border-width:6px !important; }
-    .preview-actions { bottom:-95px !important; gap:38px !important; }
-    .preview-action { min-width:120px !important; }
-    .preview-label { font-size:18px !important; }
-  }
-  /* Prevent further down-scaling on very narrow devices */
-  @media (max-width: 480px) {
-    .preview-btn { width:120px !important; height:120px !important; }
-    .preview-actions { bottom:-88px !important; gap:34px !important; }
-  }
-  @media (max-width: 390px) {
-    .preview-btn { width:115px !important; height:115px !important; }
-    .preview-actions { bottom:-84px !important; gap:30px !important; }
-  }
-}
+/* === Unified cross-device preview button styles (desktop look everywhere) === */
+.preview-action { display:flex; flex-direction:column; align-items:center; gap:14px; min-width:120px; }
+.preview-btn { width:130px; height:130px; border:none; background:none; padding:0; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; pointer-events:auto; transition:transform .18s ease; -webkit-appearance:none; appearance:none; }
+.preview-icon { width:100%; height:100%; object-fit:contain; display:block; pointer-events:none; -webkit-user-select:none; user-select:none; image-rendering:-webkit-optimize-contrast; }
+.preview-btn:hover { transform:translateY(-6px); }
+.preview-btn:active { transform:scale(.94); }
+.preview-cancel,.preview-save,.preview-share { background:none !important; }
+.preview-label { font-family:'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-weight:800; font-size:20px; color:#fff; text-shadow:0 6px 22px rgba(0,0,0,.65); letter-spacing:.5px; user-select:none; }
+/* No media queries: identical rendering iPhone / desktop */
 
 /* When preview open, hide bottomBar controls to avoid overlap */
 #preview-container.visible ~ #bottomBar, #preview-container.visible + #bottomBar { display: none; }
