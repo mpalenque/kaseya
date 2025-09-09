@@ -390,6 +390,14 @@ body {
   .preview-label { 
     font-size: 12px !important; 
   }
+  /* iPhone specific word-text sizing */
+  .word-text {
+    width: 380px !important;
+    height: 130px !important;
+  }
+  .word-text .word-inner {
+    font-size: clamp(18px, 5vw, 32px) !important;
+  }
 }
 
 /* iPhone Pro/Max Portrait */
@@ -409,6 +417,14 @@ body {
   }
   .preview-label { 
     font-size: 11px !important; 
+  }
+  /* iPhone Pro/Max specific word-text sizing */
+  .word-text {
+    width: 370px !important;
+    height: 125px !important;
+  }
+  .word-text .word-inner {
+    font-size: clamp(16px, 4.5vw, 28px) !important;
   }
 }
 
@@ -430,6 +446,14 @@ body {
   .preview-label { 
     font-size: 10px !important; 
   }
+  /* Standard iPhone specific word-text sizing */
+  .word-text {
+    width: 350px !important;
+    height: 120px !important;
+  }
+  .word-text .word-inner {
+    font-size: clamp(15px, 4.2vw, 26px) !important;
+  }
 }
 
 /* Extra small iPhone screens */
@@ -441,6 +465,14 @@ body {
   .preview-btn { 
     width: 48px !important; 
     height: 48px !important; 
+  }
+  /* Extra small iPhone specific word-text sizing */
+  .word-text {
+    width: 340px !important;
+    height: 115px !important;
+  }
+  .word-text .word-inner {
+    font-size: clamp(14px, 4vw, 24px) !important;
   }
 }
 
@@ -474,6 +506,15 @@ body {
   .preview-actions {
     bottom: calc(env(safe-area-inset-bottom, 0px) + 25px) !important;
     z-index: 25 !important;
+  }
+  /* General mobile word-text sizing */
+  .word-text {
+    width: 360px !important;
+    height: 125px !important;
+  }
+  .word-text .word-inner {
+    font-size: clamp(16px, 4.5vw, 30px) !important;
+    font-weight: 900 !important; /* make text bolder on mobile */
   }
 }
 
@@ -603,8 +644,8 @@ body {
 .word-text {
   background: linear-gradient(135deg, rgba(138, 43, 226, 0.95), rgba(75, 0, 130, 0.95));
   color: white;
-  width: 320px; /* increased from 300px */
-  height: 100px; /* increased from 90px */
+  width: 360px; /* increased from 320px */
+  height: 120px; /* increased from 100px */
   padding: 0;
   border-radius: 30px;
   font-weight: 700;
@@ -628,7 +669,7 @@ body {
   width: 100%;
   height: 100%;
   line-height: 1.15;
-  font-size: clamp(12px, 2.8vw, 24px); /* increased from clamp(6px, 1.2vw, 14px) */
+  font-size: clamp(16px, 3.5vw, 28px); /* increased further from clamp(12px, 2.8vw, 24px) */
   font-weight: 800;
   word-break: break-word;
   overflow: hidden;
