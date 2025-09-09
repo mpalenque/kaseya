@@ -368,57 +368,65 @@ body {
   /* Mobile safe-area responsive tweaks will override below */
 }
 
-/* FORCE SMALLER PREVIEW ON ALL MOBILE DEVICES */
-@media screen and (max-width: 500px) {
-  #preview-media-wrapper {
-    max-width: 280px !important;
-    max-height: 200px !important;
-    width: 280px !important;
-    height: 200px !important;
+/* iPhone Portrait optimized preview sizing - highest specificity */
+@media screen and (max-width: 480px) and (orientation: portrait) and (max-height: 950px) {
+  #preview-media-wrapper { 
+    max-width: 74vw !important; 
+    max-height: 34vh !important; 
+    min-height: 225px !important;
   }
-  .preview-actions {
-    bottom: -12px !important;
-    gap: 15px !important;
+  .preview-actions { 
+    bottom: -25px !important; 
+    gap: 30px !important; 
   }
-  .preview-btn {
-    width: 38px !important;
-    height: 38px !important;
+  .preview-btn { 
+    width: 50px !important; 
+    height: 50px !important; 
   }
-  .preview-label {
-    font-size: 9px !important;
-  }
-}
-
-/* EXTRA SMALL for older/smaller iPhones */
-@media screen and (max-width: 380px) {
-  #preview-media-wrapper {
-    max-width: 260px !important;
-    max-height: 180px !important;
-    width: 260px !important;
-    height: 180px !important;
-  }
-  .preview-actions {
-    bottom: -10px !important;
-    gap: 12px !important;
-  }
-  .preview-btn {
-    width: 35px !important;
-    height: 35px !important;
-  }
-  .preview-label {
-    font-size: 8px !important;
+  .preview-label { 
+    font-size: 12px !important; 
   }
 }
 
-/* SUPER AGGRESSIVE for any touch device */
-@media (pointer: coarse) {
-  #preview-media-wrapper {
-    max-width: 280px !important;
-    max-height: 200px !important;
+/* iPhone Pro/Max Portrait */
+@media screen and (max-width: 430px) and (orientation: portrait) and (max-height: 950px) {
+  #preview-media-wrapper { 
+    max-width: 77vw !important; 
+    max-height: 32vh !important; 
+    min-height: 207px !important;
+  }
+  .preview-actions { 
+    bottom: -23px !important; 
+    gap: 28px !important; 
+  }
+  .preview-btn { 
+    width: 46px !important; 
+    height: 46px !important; 
+  }
+  .preview-label { 
+    font-size: 11px !important; 
   }
 }
 
-
+/* Standard iPhone Portrait (375px) */
+@media screen and (max-width: 390px) and (orientation: portrait) and (max-height: 850px) {
+  #preview-media-wrapper { 
+    max-width: 79vw !important; 
+    max-height: 31vh !important; 
+    min-height: 189px !important;
+  }
+  .preview-actions { 
+    bottom: -21px !important; 
+    gap: 26px !important; 
+  }
+  .preview-btn { 
+    width: 42px !important; 
+    height: 42px !important; 
+  }
+  .preview-label { 
+    font-size: 10px !important; 
+  }
+}
 
 #preview-video, #preview-image {
   max-width: 100%;
@@ -861,20 +869,19 @@ body {
   }
 }
 
-/* iOS specific preview safe-area handling - DISABLED to not conflict */
+/* iOS specific preview safe-area handling - adjusted for smaller iPhone preview */
 @supports (-webkit-touch-callout: none) {
   #preview-container { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 10px); }
-  /* Commented out to let mobile rules take precedence
+  /* Reduced max-height constraints for iOS to not conflict with iPhone portrait rules */
   #preview-media-wrapper { 
     max-height: calc(100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 240px); 
   }
-  */
   .preview-actions { 
     bottom: calc(env(safe-area-inset-bottom, 0px) + 8px); 
   }
 }
 
-/* Landscape small-height devices - DISABLED to not conflict with mobile rules
+/* Landscape small-height devices (e.g., iPhone landscape) */
 @media (max-height: 500px) and (orientation: landscape) {
   #preview-media-wrapper { 
     max-height: calc(100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 130px); 
@@ -889,7 +896,6 @@ body {
   }
   .preview-label { font-size: clamp(12px, 2.5vw, 14px); }
 }
-*/
 
 /* Ultra-narrow phones - adjusted to not conflict with iPhone portrait rules */
 @media (max-width: 360px) and (orientation: landscape) {

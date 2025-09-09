@@ -16,7 +16,6 @@ const previewVideo = document.getElementById('preview-video');
 const previewImage = document.getElementById('preview-image');
 const previewClose = document.getElementById('preview-close');
 const previewShare = document.getElementById('preview-share');
-const previewDownload = document.getElementById('preview-download');
 const wordDisplay = document.getElementById('word-display');
 // New filter buttons logic
 const filtersBar = document.getElementById('filters-bar');
@@ -336,11 +335,6 @@ function setupEventListeners() {
   previewShare.addEventListener('click', () => {
     if (currentFile) {
       tryShareOrDownload(currentFile, currentFile.name);
-    }
-  });
-  previewDownload.addEventListener('click', () => {
-    if (currentFile) {
-      tryShareOrDownload(currentFile, currentFile.name, true);
     }
   });
 }
