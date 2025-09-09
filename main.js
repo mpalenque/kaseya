@@ -733,19 +733,27 @@ async function captureHTMLElements(ctx, canvasWidth, canvasHeight) {
     // Draw dot assets respecting depth (farther (more negative) first)
     const ordered = [...particles].sort((a,b) => a.depth - b.depth);
     for (const p of ordered) {
-      const drawX = p.x * scaleX;
-      const drawY = p.y * scaleY;
-      const size = p.baseSize * scaleX; // uniform scale
-      ctx.save();
-      // Depth-based subtle alpha & blur hint (simulate atmospheric depth)
-      const depthFactor = (p.depth + 400) / 400; // 0..1
-      const alpha = 0.55 + depthFactor * 0.45; // near => more opaque
-      ctx.globalAlpha = alpha;
-      ctx.fillStyle = p.element.style.backgroundColor || '#ffffff';
-      ctx.beginPath();
-      ctx.arc(drawX - size/2, drawY - size/2, size/2, 0, Math.PI*2);
-      ctx.fill();
-      ctx.restore();
+  // Map logical position to canvas space
+  const centerX = p.x * scaleX;
+  const centerY = p.y * scaleY;
+  // Match DOM depth-based scale used in CSS transform
+  const depthNorm = (p.currentDepth + 600) / 600; // same normalization as animate()
+  const depthScale = 0.55 + (depthNorm * 0.75);
+  // Use uniform scale so circles stay perfectly round
+  const uniScale = Math.min(scaleX, scaleY);
+  const size = p.baseSize * depthScale * uniScale;
+  ctx.save();
+  // Match DOM opacity (dot-asset is fully opaque); avoid unwanted fading in capture
+  const computed = window.getComputedStyle(p.element);
+  const alpha = parseFloat(computed.opacity || '1');
+  ctx.globalAlpha = isNaN(alpha) ? 1 : alpha;
+  // Use the actual background color from the DOM element
+  const color = p.element.style.background || p.element.style.backgroundColor || computed.backgroundColor || '#ffffff';
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(centerX, centerY, size/2, 0, Math.PI*2);
+  ctx.fill();
+  ctx.restore();
     }
   }
   
@@ -807,10 +815,31 @@ async function captureHTMLElements(ctx, canvasWidth, canvasHeight) {
     ctx.fillText(text, bannerX + bannerW/2, bannerY + bannerH/2);
   }
 
-  // Draw footer image (always include in recording) – mirrors composeFrame()
+  // Draw footer image (always include in recording) using DOM rect for perfect parity
   // We draw it last so it appears over the video just like in the live UI.
   try {
-    drawFooterOnCanvas(ctx, canvasWidth, canvasHeight);
+    const footerImg = document.querySelector('#kaseya-footer img');
+    if (footerImg && (footerImg.complete || footerImg.naturalWidth)) {
+      const rect = footerImg.getBoundingClientRect();
+      const rx = rect.left * scaleX;
+      const ry = rect.top * scaleY;
+      const rw = rect.width * scaleX;
+      const rh = rect.height * scaleY;
+      const iw = footerImg.naturalWidth || footerImg.width;
+      const ih = footerImg.naturalHeight || footerImg.height;
+      if (iw && ih && rw && rh) {
+        // Object-fit: contain inside rect while preserving aspect ratio
+        const s = Math.min(rw / iw, rh / ih);
+        const dw = iw * s;
+        const dh = ih * s;
+        const dx = rx + (rw - dw) / 2;
+        const dy = ry + (rh - dh) / 2;
+        ctx.drawImage(footerImg, dx, dy, dw, dh);
+      }
+    } else {
+      // Fallback to previous draw if DOM img not available yet
+      drawFooterOnCanvas(ctx, canvasWidth, canvasHeight);
+    }
   } catch (e) {
     console.warn('Footer draw failed in captureHTMLElements:', e);
   }
@@ -915,6 +944,22 @@ function showPreview(file, type) {
   }
   
   previewContainer.classList.add('visible');
+  // Ensure preview wrapper uses exact screen aspect and pin actions to its bottom edge
+  try {
+    document.documentElement.style.setProperty('--screen-ar', (window.innerWidth / window.innerHeight).toString());
+  } catch(e){}
+  requestAnimationFrame(() => {
+    const wrapper = document.getElementById('preview-media-wrapper');
+    const actions = document.querySelector('.preview-actions');
+    if (wrapper && actions) {
+      const r = wrapper.getBoundingClientRect();
+      actions.style.position = 'fixed';
+      actions.style.top = `${Math.round(r.bottom)}px`;
+      actions.style.left = `${Math.round(r.left + r.width/2)}px`;
+      actions.style.transform = 'translate(-50%, -100%)';
+      actions.style.bottom = 'auto';
+    }
+  });
   
   // Clean up URL after 30 seconds
   setTimeout(() => URL.revokeObjectURL(url), 30000);
@@ -1040,8 +1085,7 @@ function createParticles() {
     const el = document.createElement('div');
     el.className = 'particle dot-asset';
     el.style.position = 'absolute';
-    el.style.width = spec.size * groupScale + 'px';
-    el.style.height = spec.size * groupScale + 'px';
+    // width/height will be set after computing baseSize to ensure DOM matches capture
     el.style.borderRadius = '50%';
     el.style.background = spec.color;
     el.style.boxShadow = '0 0 25px -5px rgba(0,0,0,0.35)';
@@ -1070,6 +1114,9 @@ function createParticles() {
       // Super círculos (1.4x) cuando no son mega
       baseSize = 294 * 1.4 * groupScale * (0.9 + Math.random()*0.2);
     }
+    // Ensure DOM element size matches computed baseSize (kept in sync with capture)
+    el.style.width = baseSize + 'px';
+    el.style.height = baseSize + 'px';
     particles.push({
       element: el,
       layoutX: spec.x,
@@ -1121,7 +1168,10 @@ function createParticles() {
     .sort((a,b)=> b.depth - a.depth) // depth -40 se vuelve primero
     .filter(p=> !p.isMega)
     .slice(0,3);
-  frontMost.forEach(p => { p.baseSize *= 2; });
+  frontMost.forEach(p => { 
+    p.baseSize *= 2; 
+    if (p.element) { p.element.style.width = p.baseSize + 'px'; p.element.style.height = p.baseSize + 'px'; }
+  });
   // Ultra círculo: uno que sea el doble del más grande actual (post duplicaciones frontales)
   if (particles.length) {
     let largest = particles.reduce((m,p)=> p.baseSize>m.baseSize? p : m, particles[0]);
@@ -1130,6 +1180,7 @@ function createParticles() {
     if (largest.baseSize < ORIGINAL_MAX * groupScale * 5.5) {
       largest.baseSize *= 2; // duplicar
       largest.isUltra = true;
+      if (largest.element) { largest.element.style.width = largest.baseSize + 'px'; largest.element.style.height = largest.baseSize + 'px'; }
     }
   }
 }
@@ -1343,4 +1394,22 @@ function autoFitWordBanner() {
 // Re-fit on resize/orientation change
 window.addEventListener('resize', () => {
   autoFitWordBanner();
+  try {
+    document.documentElement.style.setProperty('--screen-ar', (window.innerWidth / window.innerHeight).toString());
+  } catch(e){}
+  // If preview visible, keep actions aligned to bottom of preview
+  if (previewContainer && previewContainer.classList.contains('visible')) {
+    requestAnimationFrame(() => {
+      const wrapper = document.getElementById('preview-media-wrapper');
+      const actions = document.querySelector('.preview-actions');
+      if (wrapper && actions) {
+        const r = wrapper.getBoundingClientRect();
+        actions.style.position = 'fixed';
+        actions.style.top = `${Math.round(r.bottom)}px`;
+        actions.style.left = `${Math.round(r.left + r.width/2)}px`;
+        actions.style.transform = 'translate(-50%, -100%)';
+        actions.style.bottom = 'auto';
+      }
+    });
+  }
 });

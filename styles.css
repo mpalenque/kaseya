@@ -365,6 +365,8 @@ body {
   justify-content: center;
   max-width: 90vw;
   max-height: 82vh;
+  /* Maintain same aspect as screen; JS sets --screen-ar and provides width/height clamps */
+  aspect-ratio: var(--screen-ar, auto);
   /* Mobile safe-area responsive tweaks will override below */
 }
 
@@ -376,7 +378,7 @@ body {
     min-height: 225px !important;
   }
   .preview-actions { 
-    bottom: -5px !important; 
+  bottom: -2px !important; 
     gap: 30px !important; 
   }
   .preview-btn { 
@@ -396,7 +398,7 @@ body {
     min-height: 207px !important;
   }
   .preview-actions { 
-    bottom: -3px !important; 
+  bottom: -1px !important; 
     gap: 28px !important; 
   }
   .preview-btn { 
@@ -416,7 +418,7 @@ body {
     min-height: 189px !important;
   }
   .preview-actions { 
-    bottom: -2px !important; 
+  bottom: 0px !important; 
     gap: 26px !important; 
   }
   .preview-btn { 
@@ -444,7 +446,7 @@ body {
 .preview-actions {
   position: absolute;
   left: 50%;
-  bottom: -10px; /* Default closer to preview edge */
+  bottom: -6px; /* Default closer to preview edge */
   transform: translate(-50%, 0);
   display: flex;
   gap: clamp(30px, 8vw, 80px); /* responsive gap between buttons */
