@@ -7,6 +7,8 @@
   user-select: none;
 }
 
+:root { --safe-bottom: env(safe-area-inset-bottom, 0px); }
+
 html, body, #app, video, canvas, button, .word-text, .preview-label, #preview-container, #bottomBar {
   -webkit-user-select: none !important;
   user-select: none !important;
@@ -373,17 +375,17 @@ body {
 /* iPhone Portrait optimized preview sizing - highest specificity */
 @media screen and (max-width: 480px) and (orientation: portrait) and (max-height: 950px) {
   #preview-media-wrapper { 
-  max-width: 86vw !important; 
-  max-height: 40vh !important; 
-  min-height: 260px !important;
+  max-width: 92vw !important; 
+  max-height: 48vh !important; 
+  min-height: 280px !important;
   }
   .preview-actions { 
   bottom: -2px !important; 
-    gap: 30px !important; 
+  gap: 24px !important; 
   }
   .preview-btn { 
-    width: 50px !important; 
-    height: 50px !important; 
+  width: 56px !important; 
+  height: 56px !important; 
   }
   .preview-label { 
     font-size: 12px !important; 
@@ -393,17 +395,17 @@ body {
 /* iPhone Pro/Max Portrait */
 @media screen and (max-width: 430px) and (orientation: portrait) and (max-height: 950px) {
   #preview-media-wrapper { 
-  max-width: 88vw !important; 
-  max-height: 38vh !important; 
-  min-height: 238px !important;
+  max-width: 94vw !important; 
+  max-height: 46vh !important; 
+  min-height: 270px !important;
   }
   .preview-actions { 
   bottom: -1px !important; 
-    gap: 28px !important; 
+  gap: 24px !important; 
   }
   .preview-btn { 
-    width: 46px !important; 
-    height: 46px !important; 
+  width: 54px !important; 
+  height: 54px !important; 
   }
   .preview-label { 
     font-size: 11px !important; 
@@ -413,17 +415,17 @@ body {
 /* Standard iPhone Portrait (375px) */
 @media screen and (max-width: 390px) and (orientation: portrait) and (max-height: 850px) {
   #preview-media-wrapper { 
-  max-width: 90vw !important; 
-  max-height: 36vh !important; 
-  min-height: 212px !important;
+  max-width: 94vw !important; 
+  max-height: 44vh !important; 
+  min-height: 236px !important;
   }
   .preview-actions { 
   bottom: 0px !important; 
-    gap: 26px !important; 
+  gap: 22px !important; 
   }
   .preview-btn { 
-    width: 42px !important; 
-    height: 42px !important; 
+  width: 50px !important; 
+  height: 50px !important; 
   }
   .preview-label { 
     font-size: 10px !important; 
@@ -820,9 +822,9 @@ body {
   }
   
   .preview-controls button {
-    width: 45px;
-    height: 45px;
-    font-size: 16px;
+    width: 50px;
+    height: 50px;
+    font-size: 18px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -876,11 +878,9 @@ body {
   #preview-container { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 10px); }
   /* Reduced max-height constraints for iOS to not conflict with iPhone portrait rules */
   #preview-media-wrapper { 
-    max-height: calc(100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 240px); 
+    max-height: calc(100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 180px); 
   }
-  .preview-actions { 
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 8px); 
-  }
+  .preview-actions { position: fixed !important; transform: translate(-50%, 0) !important; bottom: calc(env(safe-area-inset-bottom, 0px) + 10px) !important; left: 50% !important; }
 }
 
 /* Landscape small-height devices (e.g., iPhone landscape) */
