@@ -366,7 +366,7 @@ body {
   align-items: center;
   justify-content: center;
   max-width: 96vw;
-  max-height: 78vh; /* leave headroom for buttons below */
+  max-height: 82vh; /* allow taller preview; actions sit outside now */
   /* Maintain same aspect as screen; JS sets --screen-ar and provides width/height clamps */
   aspect-ratio: var(--screen-ar, auto);
   /* Mobile safe-area responsive tweaks will override below */
@@ -375,12 +375,11 @@ body {
 /* iPhone Portrait optimized preview sizing - highest specificity */
 @media screen and (max-width: 480px) and (orientation: portrait) and (max-height: 950px) {
   #preview-media-wrapper { 
-  max-width: 92vw !important; 
-  max-height: 48vh !important; 
-  min-height: 280px !important;
+  max-width: 94vw !important; 
+  max-height: 60vh !important; 
+  min-height: 300px !important;
   }
   .preview-actions { 
-  bottom: -2px !important; 
   gap: 24px !important; 
   }
   .preview-btn { 
@@ -395,12 +394,11 @@ body {
 /* iPhone Pro/Max Portrait */
 @media screen and (max-width: 430px) and (orientation: portrait) and (max-height: 950px) {
   #preview-media-wrapper { 
-  max-width: 94vw !important; 
-  max-height: 46vh !important; 
-  min-height: 270px !important;
+  max-width: 96vw !important; 
+  max-height: 58vh !important; 
+  min-height: 290px !important;
   }
   .preview-actions { 
-  bottom: -1px !important; 
   gap: 24px !important; 
   }
   .preview-btn { 
@@ -415,12 +413,11 @@ body {
 /* Standard iPhone Portrait (375px) */
 @media screen and (max-width: 390px) and (orientation: portrait) and (max-height: 850px) {
   #preview-media-wrapper { 
-  max-width: 94vw !important; 
-  max-height: 44vh !important; 
-  min-height: 236px !important;
+  max-width: 96vw !important; 
+  max-height: 56vh !important; 
+  min-height: 260px !important;
   }
   .preview-actions { 
-  bottom: 0px !important; 
   gap: 22px !important; 
   }
   .preview-btn { 
@@ -446,14 +443,14 @@ body {
 
 /* New preview actions (bottom) */
 .preview-actions {
-  position: absolute;
+  position: fixed;
   left: 50%;
-  bottom: -6px; /* Default closer to preview edge */
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
   transform: translate(-50%, 0);
   display: flex;
   gap: clamp(24px, 6vw, 64px); /* responsive gap between buttons */
   align-items: flex-start;
-  z-index: 210;
+  z-index: 220; /* above preview content */
   pointer-events: none; /* sólo botones clickeables */
 }
 
@@ -683,11 +680,11 @@ body {
   }
   /* Preview layout adjustments (mobile) */
   #preview-container { 
-    padding: env(safe-area-inset-top, 12px) 0 env(safe-area-inset-bottom, 12px);
+    padding: env(safe-area-inset-top, 12px) 0 calc(env(safe-area-inset-bottom, 12px) + 90px);
   }
   #preview-media-wrapper {
     max-width: 100vw;
-    max-height: calc(100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 170px);
+    max-height: calc(100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 190px);
     padding: 0 10px;
   }
   #preview-video, #preview-image {
@@ -695,14 +692,7 @@ body {
     height: auto;
     max-height: 100%;
   }
-  .preview-actions {
-    position: fixed;
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
-    left: 50%;
-    transform: translateX(-50%);
-    gap: clamp(18px, 10vw, 46px);
-    pointer-events: none;
-  }
+  .preview-actions { gap: clamp(18px, 10vw, 46px); }
   .preview-btn { 
     width: clamp(54px, 18vw, 78px); 
     height: clamp(54px, 18vw, 78px); 
@@ -875,12 +865,10 @@ body {
 
 /* iOS specific preview safe-area handling - adjusted for smaller iPhone preview */
 @supports (-webkit-touch-callout: none) {
-  #preview-container { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 10px); }
-  /* Reduced max-height constraints for iOS to not conflict with iPhone portrait rules */
+  #preview-container { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 12px); }
   #preview-media-wrapper { 
-    max-height: calc(100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 180px); 
+    max-height: calc(100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 190px); 
   }
-  .preview-actions { position: fixed !important; transform: translate(-50%, 0) !important; bottom: calc(env(safe-area-inset-bottom, 0px) + 10px) !important; left: 50% !important; }
 }
 
 /* Landscape small-height devices (e.g., iPhone landscape) */

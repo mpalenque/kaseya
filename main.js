@@ -947,22 +947,7 @@ function showPreview(file, type) {
   try {
     document.documentElement.style.setProperty('--screen-ar', (window.innerWidth / window.innerHeight).toString());
   } catch(e){}
-  requestAnimationFrame(() => {
-    const wrapper = document.getElementById('preview-media-wrapper');
-    const actions = document.querySelector('.preview-actions');
-    if (wrapper && actions) {
-      const r = wrapper.getBoundingClientRect();
-  const ar = actions.getBoundingClientRect();
-      actions.style.position = 'fixed';
-      const GAP = 6; // small breathing space below preview
-  const desiredTop = Math.round(r.bottom + GAP);
-  const maxTop = Math.round(window.innerHeight - ar.height - 10);
-  actions.style.top = `${Math.min(desiredTop, maxTop)}px`;
-      actions.style.left = `${Math.round(r.left + r.width/2)}px`;
-      actions.style.transform = 'translate(-50%, 0)';
-      actions.style.bottom = 'auto';
-    }
-  });
+  // CSS pins actions; no JS positioning needed
   
   // Clean up URL after 30 seconds
   setTimeout(() => URL.revokeObjectURL(url), 30000);
@@ -1400,23 +1385,5 @@ window.addEventListener('resize', () => {
   try {
     document.documentElement.style.setProperty('--screen-ar', (window.innerWidth / window.innerHeight).toString());
   } catch(e){}
-  // If preview visible, keep actions aligned to bottom of preview
-  if (previewContainer && previewContainer.classList.contains('visible')) {
-    requestAnimationFrame(() => {
-      const wrapper = document.getElementById('preview-media-wrapper');
-      const actions = document.querySelector('.preview-actions');
-      if (wrapper && actions) {
-        const r = wrapper.getBoundingClientRect();
-  const ar = actions.getBoundingClientRect();
-        actions.style.position = 'fixed';
-  const GAP = 6;
-  const desiredTop = Math.round(r.bottom + GAP);
-  const maxTop = Math.round(window.innerHeight - ar.height - 10);
-  actions.style.top = `${Math.min(desiredTop, maxTop)}px`;
-        actions.style.left = `${Math.round(r.left + r.width/2)}px`;
-  actions.style.transform = 'translate(-50%, 0)';
-        actions.style.bottom = 'auto';
-      }
-    });
-  }
+  // Preview actions are fixed by CSS
 });

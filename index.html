@@ -76,20 +76,20 @@
       <div id="preview-media-wrapper">
         <video id="preview-video" playsinline muted controls autoplay loop></video>
         <img id="preview-image" />
-        <!-- Bottom actions overlapping lower edge of preview (Figma 02_None) -->
-        <div class="preview-actions" aria-label="Preview actions">
-          <div class="preview-action" data-action="cancel">
-            <button id="preview-close" type="button" class="preview-btn preview-cancel" aria-label="Cancel">
-              <img src="assets/icons/cancel.svg" alt="Cancel" class="preview-icon" />
-            </button>
-            <div class="preview-label">Cancel</div>
-          </div>
-          <div class="preview-action" data-action="share">
-            <button id="preview-share" type="button" class="preview-btn preview-share" aria-label="Share">
-              <img src="assets/icons/share.svg" alt="Share" class="preview-icon" />
-            </button>
-            <div class="preview-label">Share</div>
-          </div>
+      </div>
+      <!-- Bottom actions pinned to the preview overlay container -->
+      <div class="preview-actions" aria-label="Preview actions">
+        <div class="preview-action" data-action="cancel">
+          <button id="preview-close" type="button" class="preview-btn preview-cancel" aria-label="Cancel">
+            <img src="assets/icons/cancel.svg" alt="Cancel" class="preview-icon" />
+          </button>
+          <div class="preview-label">Cancel</div>
+        </div>
+        <div class="preview-action" data-action="share">
+          <button id="preview-share" type="button" class="preview-btn preview-share" aria-label="Share">
+            <img src="assets/icons/share.svg" alt="Share" class="preview-icon" />
+          </button>
+          <div class="preview-label">Share</div>
         </div>
       </div>
     </div>
