@@ -603,8 +603,8 @@ body {
 .word-text {
   background: linear-gradient(135deg, rgba(138, 43, 226, 0.95), rgba(75, 0, 130, 0.95));
   color: white;
-  width: 300px; /* fixed width */
-  height: 90px; /* fixed height */
+  width: 320px; /* increased from 300px */
+  height: 100px; /* increased from 90px */
   padding: 0;
   border-radius: 30px;
   font-weight: 700;
@@ -628,7 +628,7 @@ body {
   width: 100%;
   height: 100%;
   line-height: 1.15;
-  font-size: clamp(6px, 1.2vw, 14px); /* smaller range */
+  font-size: clamp(12px, 2.8vw, 24px); /* increased from clamp(6px, 1.2vw, 14px) */
   font-weight: 800;
   word-break: break-word;
   overflow: hidden;
@@ -760,7 +760,9 @@ body {
   }
   
   .word-text {
-    font-size: 1.5rem;
+    width: 340px; /* slightly larger for mobile */
+    height: 110px; /* slightly larger for mobile */
+    font-size: 1.8rem; /* increased from 1.5rem */
     padding: 12px 20px;
     margin: 0 15px;
   }
@@ -831,7 +833,9 @@ body {
   }
   
   .word-text {
-    font-size: 1.5rem;
+    width: 340px; /* larger for mobile */
+    height: 110px; /* larger for mobile */ 
+    font-size: 1.8rem; /* increased from 1.5rem */
     padding: 10px 16px;
     margin: 0 10px;
   }

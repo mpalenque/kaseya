@@ -375,9 +375,9 @@ async function startWordRoulette(shouldRecord = false) {
   // Use the permanent word element for spinning
   permanentWordElement.className = 'word-text spinning';
   
-  // Spin for 2 seconds
-  const spinDuration = 2000;
-  const spinInterval = 100;
+  // Spin for 3 seconds (increased from 2)
+  const spinDuration = 3000;
+  const spinInterval = 200; // increased from 100ms to make it slower
   let spinTime = 0;
   
   const spinInterval_id = setInterval(() => {
