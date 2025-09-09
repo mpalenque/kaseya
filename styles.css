@@ -376,7 +376,7 @@ body {
     min-height: 225px !important;
   }
   .preview-actions { 
-    bottom: -25px !important; 
+    bottom: -5px !important; 
     gap: 30px !important; 
   }
   .preview-btn { 
@@ -396,7 +396,7 @@ body {
     min-height: 207px !important;
   }
   .preview-actions { 
-    bottom: -23px !important; 
+    bottom: -3px !important; 
     gap: 28px !important; 
   }
   .preview-btn { 
@@ -416,7 +416,7 @@ body {
     min-height: 189px !important;
   }
   .preview-actions { 
-    bottom: -21px !important; 
+    bottom: -2px !important; 
     gap: 26px !important; 
   }
   .preview-btn { 
