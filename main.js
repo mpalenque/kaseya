@@ -563,8 +563,8 @@ function drawFooterOnCanvas(ctx, canvasWidth, canvasHeight) {
     return;
   }
   
-  // Scale footer proportionally to canvas size - doubled (was 40%, now 80%)
-  const maxFooterWidth = canvasWidth * 0.8;
+  // Scale footer to full canvas width for consistent appearance with live view
+  const maxFooterWidth = canvasWidth; // Full width instead of 80%
   const scale = Math.min(maxFooterWidth / footerWidth, 1);
   const scaledWidth = footerWidth * scale;
   const scaledHeight = footerHeight * scale;

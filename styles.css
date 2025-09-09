@@ -444,7 +444,7 @@ body {
 .preview-actions {
   position: absolute;
   left: 50%;
-  bottom: clamp(-60px, -10vw, -90px);
+  bottom: -10px; /* Default closer to preview edge */
   transform: translate(-50%, 0);
   display: flex;
   gap: clamp(30px, 8vw, 80px); /* responsive gap between buttons */
