@@ -819,7 +819,7 @@ async function captureHTMLElements(ctx, canvasWidth, canvasHeight) {
   // We draw it last so it appears over the video just like in the live UI.
   try {
     const footerImg = document.querySelector('#kaseya-footer img');
-    if (footerImg && (footerImg.complete || footerImg.naturalWidth)) {
+  if (footerImg && (footerImg.complete || footerImg.naturalWidth)) {
       const rect = footerImg.getBoundingClientRect();
       const rx = rect.left * scaleX;
       const ry = rect.top * scaleY;
@@ -828,13 +828,12 @@ async function captureHTMLElements(ctx, canvasWidth, canvasHeight) {
       const iw = footerImg.naturalWidth || footerImg.width;
       const ih = footerImg.naturalHeight || footerImg.height;
       if (iw && ih && rw && rh) {
-        // Object-fit: contain inside rect while preserving aspect ratio
-        const s = Math.min(rw / iw, rh / ih);
-        const dw = iw * s;
-        const dh = ih * s;
-        const dx = rx + (rw - dw) / 2;
-        const dy = ry + (rh - dh) / 2;
-        ctx.drawImage(footerImg, dx, dy, dw, dh);
+    // Emulate CSS: width:100%; height:auto; bottom aligned inside its rect
+    const dw = rw;
+    const dh = (ih / iw) * dw;
+    const dx = rx;
+    const dy = ry + (rh - dh); // align image bottom with rect bottom
+    ctx.drawImage(footerImg, dx, Math.round(dy), Math.round(dw), Math.round(dh));
       }
     } else {
       // Fallback to previous draw if DOM img not available yet
@@ -954,9 +953,10 @@ function showPreview(file, type) {
     if (wrapper && actions) {
       const r = wrapper.getBoundingClientRect();
       actions.style.position = 'fixed';
-      actions.style.top = `${Math.round(r.bottom)}px`;
+      const GAP = 6; // small breathing space below preview
+      actions.style.top = `${Math.round(r.bottom + GAP)}px`;
       actions.style.left = `${Math.round(r.left + r.width/2)}px`;
-      actions.style.transform = 'translate(-50%, -100%)';
+      actions.style.transform = 'translate(-50%, 0)';
       actions.style.bottom = 'auto';
     }
   });
@@ -1405,9 +1405,10 @@ window.addEventListener('resize', () => {
       if (wrapper && actions) {
         const r = wrapper.getBoundingClientRect();
         actions.style.position = 'fixed';
-        actions.style.top = `${Math.round(r.bottom)}px`;
+  const GAP = 6;
+  actions.style.top = `${Math.round(r.bottom + GAP)}px`;
         actions.style.left = `${Math.round(r.left + r.width/2)}px`;
-        actions.style.transform = 'translate(-50%, -100%)';
+  actions.style.transform = 'translate(-50%, 0)`';
         actions.style.bottom = 'auto';
       }
     });
