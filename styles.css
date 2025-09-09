@@ -363,8 +363,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  max-width: 90vw;
-  max-height: 82vh;
+  max-width: 96vw;
+  max-height: 78vh; /* leave headroom for buttons below */
   /* Maintain same aspect as screen; JS sets --screen-ar and provides width/height clamps */
   aspect-ratio: var(--screen-ar, auto);
   /* Mobile safe-area responsive tweaks will override below */
@@ -373,9 +373,9 @@ body {
 /* iPhone Portrait optimized preview sizing - highest specificity */
 @media screen and (max-width: 480px) and (orientation: portrait) and (max-height: 950px) {
   #preview-media-wrapper { 
-    max-width: 74vw !important; 
-    max-height: 34vh !important; 
-    min-height: 225px !important;
+  max-width: 86vw !important; 
+  max-height: 40vh !important; 
+  min-height: 260px !important;
   }
   .preview-actions { 
   bottom: -2px !important; 
@@ -393,9 +393,9 @@ body {
 /* iPhone Pro/Max Portrait */
 @media screen and (max-width: 430px) and (orientation: portrait) and (max-height: 950px) {
   #preview-media-wrapper { 
-    max-width: 77vw !important; 
-    max-height: 32vh !important; 
-    min-height: 207px !important;
+  max-width: 88vw !important; 
+  max-height: 38vh !important; 
+  min-height: 238px !important;
   }
   .preview-actions { 
   bottom: -1px !important; 
@@ -413,9 +413,9 @@ body {
 /* Standard iPhone Portrait (375px) */
 @media screen and (max-width: 390px) and (orientation: portrait) and (max-height: 850px) {
   #preview-media-wrapper { 
-    max-width: 79vw !important; 
-    max-height: 31vh !important; 
-    min-height: 189px !important;
+  max-width: 90vw !important; 
+  max-height: 36vh !important; 
+  min-height: 212px !important;
   }
   .preview-actions { 
   bottom: 0px !important; 
@@ -449,7 +449,7 @@ body {
   bottom: -6px; /* Default closer to preview edge */
   transform: translate(-50%, 0);
   display: flex;
-  gap: clamp(30px, 8vw, 80px); /* responsive gap between buttons */
+  gap: clamp(24px, 6vw, 64px); /* responsive gap between buttons */
   align-items: flex-start;
   z-index: 210;
   pointer-events: none; /* sólo botones clickeables */
@@ -465,8 +465,8 @@ body {
 }
 
 .preview-btn { 
-  width: clamp(70px, 18vw, 100px); 
-  height: clamp(70px, 18vw, 100px); 
+  width: clamp(72px, 20vw, 110px); 
+  height: clamp(72px, 20vw, 110px); 
   border: none; 
   background: none; 
   padding: 0; 

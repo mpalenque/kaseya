@@ -952,9 +952,12 @@ function showPreview(file, type) {
     const actions = document.querySelector('.preview-actions');
     if (wrapper && actions) {
       const r = wrapper.getBoundingClientRect();
+  const ar = actions.getBoundingClientRect();
       actions.style.position = 'fixed';
       const GAP = 6; // small breathing space below preview
-      actions.style.top = `${Math.round(r.bottom + GAP)}px`;
+  const desiredTop = Math.round(r.bottom + GAP);
+  const maxTop = Math.round(window.innerHeight - ar.height - 10);
+  actions.style.top = `${Math.min(desiredTop, maxTop)}px`;
       actions.style.left = `${Math.round(r.left + r.width/2)}px`;
       actions.style.transform = 'translate(-50%, 0)';
       actions.style.bottom = 'auto';
@@ -1404,11 +1407,14 @@ window.addEventListener('resize', () => {
       const actions = document.querySelector('.preview-actions');
       if (wrapper && actions) {
         const r = wrapper.getBoundingClientRect();
+  const ar = actions.getBoundingClientRect();
         actions.style.position = 'fixed';
   const GAP = 6;
-  actions.style.top = `${Math.round(r.bottom + GAP)}px`;
+  const desiredTop = Math.round(r.bottom + GAP);
+  const maxTop = Math.round(window.innerHeight - ar.height - 10);
+  actions.style.top = `${Math.min(desiredTop, maxTop)}px`;
         actions.style.left = `${Math.round(r.left + r.width/2)}px`;
-  actions.style.transform = 'translate(-50%, 0)`';
+  actions.style.transform = 'translate(-50%, 0)';
         actions.style.bottom = 'auto';
       }
     });
