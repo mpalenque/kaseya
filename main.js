@@ -551,6 +551,71 @@ function drawOverlay() {
     // Update word to center position if no face
     updateWordPosition();
   }
+
+  // Draw rings on canvas so they are included in recorded captures
+  drawRingsOnCanvas(ctx);
+}
+
+// Draw animated rings into the overlay canvas (so composeFrame includes them)
+function drawRingsOnCanvas(ctx) {
+  if (!permanentWordElement) return;
+  if (currentMode !== 'draw') return;
+
+  const bannerW = permanentWordElement.clientWidth || 360;
+  const bannerH = permanentWordElement.clientHeight || 120;
+  const centerX = smoothWordX;
+  const bannerBottomY = smoothWordY + bannerH;
+  const lift = Math.round(bannerH * 0.10);
+
+  const ring1W = Math.round(bannerW * 1.25 * RING_WIDTH_SCALE);
+  const ring1H = Math.max(12, Math.round(bannerH * 0.42 * RING_HEIGHT_SCALE));
+  const ring2W = ring1W;
+  const ring2H = ring1H;
+
+  // animation params (same as DOM animation)
+  const rotAmp = 1.2; // degrees
+  const bobAmp = 3.5; // px
+  const rotFreq = 0.35; // cycles/sec
+  const bobFreq = 0.6; // cycles/sec
+  const phasePurple = 0;
+  const phaseCyan = 1.3;
+  const t = performance.now() / 1000;
+
+  // purple
+  const baseP = RING_ANGLE_BASE + (RING_ANGLE_DELTA / 2);
+  const animRotP = Math.sin(2 * Math.PI * rotFreq * t + phasePurple) * rotAmp;
+  const animBobP = Math.sin(2 * Math.PI * bobFreq * t + phasePurple) * bobAmp;
+  const centerYP = bannerBottomY + ring1H / 2 + RING_Y_OFFSET - lift + animBobP;
+  const rxP = ring1W / 2;
+  const ryP = ring1H / 2;
+  const angleP = (baseP + animRotP) * (Math.PI / 180);
+
+  // cyan
+  const baseC = RING_ANGLE_BASE - (RING_ANGLE_DELTA / 2);
+  const animRotC = Math.sin(2 * Math.PI * rotFreq * t + phaseCyan) * rotAmp * 0.9;
+  const animBobC = Math.sin(2 * Math.PI * bobFreq * t + phaseCyan) * bobAmp * 0.9;
+  const centerYC = bannerBottomY + ring2H / 2 + RING_Y_OFFSET - lift + animBobC;
+  const rxC = ring2W / 2;
+  const ryC = ring2H / 2;
+  const angleC = (baseC + animRotC) * (Math.PI / 180);
+
+  // Draw onto overlay canvas
+  ctx.save();
+  ctx.lineWidth = 4;
+  ctx.lineCap = 'round';
+  // Purple stroke
+  ctx.strokeStyle = '#AA3BFF';
+  ctx.beginPath();
+  ctx.ellipse(centerX, centerYP, rxP, ryP, angleP, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Cyan stroke
+  ctx.beginPath();
+  ctx.strokeStyle = '#00F0FF';
+  ctx.ellipse(centerX, centerYC, rxC, ryC, angleC, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.restore();
 }
 
 function drawWord(x, y) {
