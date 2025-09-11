@@ -33,6 +33,14 @@ let animationId; // legacy
 let detectionRAF = 0; // new RAF for detection
 let renderRAF = 0; // new RAF for rendering
 let permanentWordElement = null;
+let ellipsePurple = null;
+let ellipseCyan = null;
+// Ring tuning (defaults requested by user)
+let RING_WIDTH_SCALE = 0.83;   // width scale relative to banner (83%)
+let RING_HEIGHT_SCALE = 1.5;   // height scale relative to banner (150%)
+let RING_ANGLE_BASE = -3;      // degrees; base rotation
+let RING_ANGLE_DELTA = 1.8;    // slight difference between them (degrees)
+let RING_Y_OFFSET = -14;       // px offset applied to rings (positive moves them down)
 // Long-press / freeze recording behavior
 let pressTimer; // existing usage
 let freezeActive = false; // when true, we stop updating dynamic content and keep last frame
@@ -98,8 +106,10 @@ async function init() {
     await initCamera();
     await initFaceDetection();
     await preloadFooterImage(); // Preload footer for recording
-    setupEventListeners();
+  setupEventListeners();
     createPermanentWordElement();
+  createDrawEllipses();
+  createRingsTuner();
     startDetectionLoop();
     hideLoadingOverlay();
   } catch (error) {
@@ -225,6 +235,24 @@ function createPermanentWordElement() {
   autoFitWordBanner();
 }
 
+function createDrawEllipses() {
+  // Purple ellipse (#AA3BFF)
+  ellipsePurple = document.createElement('div');
+  ellipsePurple.className = 'draw-ellipse ellipse-purple';
+  ellipsePurple.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none"><ellipse cx="50" cy="50" rx="45" ry="25" fill="none" stroke="currentColor" stroke-width="4" vector-effect="non-scaling-stroke"/></svg>';
+  document.body.appendChild(ellipsePurple);
+
+  // Cyan ellipse (#00F0FF)
+  ellipseCyan = document.createElement('div');
+  ellipseCyan.className = 'draw-ellipse ellipse-cyan';
+  ellipseCyan.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none"><ellipse cx="50" cy="50" rx="45" ry="25" fill="none" stroke="currentColor" stroke-width="4" vector-effect="non-scaling-stroke"/></svg>';
+  document.body.appendChild(ellipseCyan);
+
+  // Start hidden until positioned
+  ellipsePurple.style.opacity = '0';
+  ellipseCyan.style.opacity = '0';
+}
+
 function updateWordPosition() {
   if (!permanentWordElement || particlesMode) return;
 
@@ -296,6 +324,208 @@ function updateWordPosition() {
   permanentWordElement.style.left = `${smoothWordX}px`;
   permanentWordElement.style.top = `${smoothWordY}px`;
   permanentWordElement.style.transform = 'translateX(-50%)';
+
+  // Update ellipses behind the banner (only in draw mode), centered like Saturn rings
+  if (ellipsePurple && ellipseCyan) {
+    const visible = (currentMode === 'draw');
+    if (!visible) {
+      ellipsePurple.style.opacity = '0';
+      ellipseCyan.style.opacity = '0';
+    } else {
+      const bannerW = permanentWordElement.clientWidth || 360;
+      const bannerH = permanentWordElement.clientHeight || 120;
+  const centerX = smoothWordX;
+  const bannerBottomY = smoothWordY + bannerH; // bottom edge of banner
+
+  // Elliptical ring sizes (outline) relative to banner (scaled by tuners)
+  const ring1W = Math.round(bannerW * 1.25 * RING_WIDTH_SCALE);
+  const ring1H = Math.max(12, Math.round(bannerH * 0.42 * RING_HEIGHT_SCALE));
+  // make cyan equal size to purple per request
+  const ring2W = ring1W;
+  const ring2H = ring1H;
+
+      // Shared geometry
+      [ellipsePurple, ellipseCyan].forEach(el => {
+        el.style.position = 'fixed';
+        el.style.left = `${centerX}px`;
+        el.style.zIndex = '14'; // behind banner (banner z-index is 15)
+        el.style.pointerEvents = 'none';
+        el.style.background = 'transparent';
+      });
+
+      // Individual sizes applied to container; SVG will handle rotation and bobbing
+      ellipsePurple.style.width = `${ring1W}px`;
+      ellipsePurple.style.height = `${ring1H}px`;
+  // center the purple ring so its top edge touches the banner bottom, plus Y offset
+  const lift = Math.round(bannerH * 0.10); // raise rings by 10% of banner height
+  ellipsePurple.style.top = `${bannerBottomY + ring1H / 2 + RING_Y_OFFSET - lift}px`;
+      // keep container centered only
+      ellipsePurple.style.transform = 'translate(-50%, -50%)';
+      {
+        const svg = ellipsePurple.querySelector('svg');
+  if (svg) { displayBlock(svg); svg.style.transformOrigin = '50% 50%'; svg.style.willChange = 'transform'; }
+      }
+
+      ellipseCyan.style.width = `${ring2W}px`;
+      ellipseCyan.style.height = `${ring2H}px`;
+  // center the cyan ring so its top edge touches the banner bottom, plus Y offset
+  ellipseCyan.style.top = `${bannerBottomY + ring2H / 2 + RING_Y_OFFSET - lift}px`;
+      ellipseCyan.style.transform = 'translate(-50%, -50%)';
+      {
+        const svg = ellipseCyan.querySelector('svg');
+  if (svg) { displayBlock(svg); svg.style.transformOrigin = '50% 50%'; svg.style.willChange = 'transform'; }
+      }
+
+      // Visible
+      ellipsePurple.style.opacity = '1';
+      ellipseCyan.style.opacity = '1';
+    }
+  }
+}
+
+// helper to avoid layout gaps from inline SVG
+function displayBlock(el){ el.style.display = 'block'; }
+
+// Ring animation (rotation + bobbing)
+let ringAnimRAF = 0;
+function startRingAnimation() {
+  let last = performance.now();
+  const rotAmp = 1.2; // degrees
+  const bobAmp = 3.5; // px
+  const rotFreq = 0.35; // cycles per second
+  const bobFreq = 0.6; // cycles per second
+  const phasePurple = 0;
+  const phaseCyan = 1.3; // offset so they move independently
+
+  function step(now) {
+    const t = now / 1000;
+    // only update if visible to reduce work
+    const visible = (currentMode === 'draw');
+
+    if (ellipsePurple) {
+      const svgP = ellipsePurple.querySelector('svg');
+      if (svgP) {
+        const baseP = RING_ANGLE_BASE + (RING_ANGLE_DELTA / 2);
+        const animRot = Math.sin(2 * Math.PI * rotFreq * t + phasePurple) * rotAmp;
+        const animBob = Math.sin(2 * Math.PI * bobFreq * t + phasePurple) * bobAmp;
+        svgP.style.transform = `rotate(${baseP + animRot}deg) translateY(${visible ? animBob : 0}px)`;
+      }
+    }
+
+    if (ellipseCyan) {
+      const svgC = ellipseCyan.querySelector('svg');
+      if (svgC) {
+        const baseC = RING_ANGLE_BASE - (RING_ANGLE_DELTA / 2);
+        const animRot = Math.sin(2 * Math.PI * rotFreq * t + phaseCyan) * rotAmp * 0.9; // slightly different amp
+        const animBob = Math.sin(2 * Math.PI * bobFreq * t + phaseCyan) * bobAmp * 0.9;
+        svgC.style.transform = `rotate(${baseC + animRot}deg) translateY(${visible ? animBob : 0}px)`;
+      }
+    }
+
+    ringAnimRAF = requestAnimationFrame(step);
+  }
+
+  if (!ringAnimRAF) ringAnimRAF = requestAnimationFrame(step);
+}
+
+// Start animation immediately
+startRingAnimation();
+
+// Simple UI sliders to tune ring rotation and size
+function createRingsTuner() {
+  const panel = document.createElement('div');
+  panel.id = 'rings-tuner';
+  panel.style.cssText = `
+    position: fixed; top: 8px; left: 8px; z-index: 1000;
+    background: rgba(0,0,0,0.55); color: #fff; padding: 8px 10px; border-radius: 8px;
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    font-size: 12px; line-height: 1.2; backdrop-filter: blur(6px);
+  `;
+  panel.innerHTML = `
+    <div class="rt-row" style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+      <label style="white-space:nowrap;">Rotación
+        <input id="rt-rot" type="range" min="-45" max="45" step="0.5" value="${RING_ANGLE_BASE}" style="vertical-align:middle; width: 160px; margin-left:6px;">
+      </label>
+      <span id="rt-rot-val" style="min-width:86px; text-align:right; display:inline-block;">${RING_ANGLE_BASE.toFixed(1)}°/Δ${RING_ANGLE_DELTA}°</span>
+    </div>
+    <div class="rt-row" style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+      <label style="white-space:nowrap;">Ancho
+        <input id="rt-w" type="range" min="40" max="150" step="1" value="${Math.round(RING_WIDTH_SCALE*100)}" style="vertical-align:middle; width: 160px; margin-left:6px;">
+      </label>
+      <span id="rt-w-val" style="min-width:46px; text-align:right; display:inline-block;">${Math.round(RING_WIDTH_SCALE*100)}%</span>
+    </div>
+    <div class="rt-row" style="display:flex; align-items:center; gap:8px;">
+      <label style="white-space:nowrap;">Alto
+        <input id="rt-h" type="range" min="40" max="150" step="1" value="${Math.round(RING_HEIGHT_SCALE*100)}" style="vertical-align:middle; width: 160px; margin-left:6px;">
+      </label>
+      <span id="rt-h-val" style="min-width:46px; text-align:right; display:inline-block;">${Math.round(RING_HEIGHT_SCALE*100)}%</span>
+    </div>
+  `;
+  // append delta slider row
+  const deltaRow = document.createElement('div');
+  deltaRow.style.cssText = 'display:flex; align-items:center; gap:8px; margin-top:6px;';
+  deltaRow.innerHTML = `
+    <label style="white-space:nowrap;">Delta rotación
+      <input id="rt-delta" type="range" min="0" max="20" step="0.1" value="${RING_ANGLE_DELTA}" style="vertical-align:middle; width:160px; margin-left:6px;">
+    </label>
+    <span id="rt-delta-val" style="min-width:46px; text-align:right; display:inline-block;">${RING_ANGLE_DELTA}°</span>
+  `;
+  panel.appendChild(deltaRow);
+
+  // add Y offset slider
+  const yRow = document.createElement('div');
+  yRow.style.cssText = 'display:flex; align-items:center; gap:8px; margin-top:6px;';
+  yRow.innerHTML = `
+    <label style="white-space:nowrap;">Offset Y (px)
+      <input id="rt-y" type="range" min="-80" max="120" step="1" value="${RING_Y_OFFSET}" style="vertical-align:middle; width:160px; margin-left:6px;">
+    </label>
+    <span id="rt-y-val" style="min-width:46px; text-align:right; display:inline-block;">${RING_Y_OFFSET}px</span>
+  `;
+  panel.appendChild(yRow);
+  document.body.appendChild(panel);
+  // hide tuner panel by default
+  panel.style.display = 'none';
+
+  const rot = panel.querySelector('#rt-rot');
+  const rotVal = panel.querySelector('#rt-rot-val');
+  const w = panel.querySelector('#rt-w');
+  const wVal = panel.querySelector('#rt-w-val');
+  const h = panel.querySelector('#rt-h');
+  const hVal = panel.querySelector('#rt-h-val');
+  const d = panel.querySelector('#rt-delta');
+  const dVal = panel.querySelector('#rt-delta-val');
+  const y = panel.querySelector('#rt-y');
+  const yVal = panel.querySelector('#rt-y-val');
+
+  const refresh = () => {
+  rotVal.textContent = `${RING_ANGLE_BASE.toFixed(1)}°/Δ${RING_ANGLE_DELTA.toFixed(1)}°`;
+    wVal.textContent = `${Math.round(RING_WIDTH_SCALE*100)}%`;
+    hVal.textContent = `${Math.round(RING_HEIGHT_SCALE*100)}%`;
+    updateWordPosition();
+  };
+
+  rot.addEventListener('input', (e) => {
+    RING_ANGLE_BASE = parseFloat(e.target.value);
+    refresh();
+  });
+  w.addEventListener('input', (e) => {
+    RING_WIDTH_SCALE = Math.max(0.1, parseInt(e.target.value, 10) / 100);
+    refresh();
+  });
+  h.addEventListener('input', (e) => {
+    RING_HEIGHT_SCALE = Math.max(0.1, parseInt(e.target.value, 10) / 100);
+    refresh();
+  });
+  d.addEventListener('input', (e) => {
+  RING_ANGLE_DELTA = Math.max(0, parseFloat(e.target.value));
+  dVal.textContent = `${RING_ANGLE_DELTA.toFixed(1)}°`;
+    refresh();
+  });
+  y.addEventListener('input', (e) => {
+    RING_Y_OFFSET = parseInt(e.target.value, 10) || 0;
+    yVal.textContent = `${RING_Y_OFFSET}px`;
+    refresh();
+  });
 }
 
 function stopDetectionLoop() {
@@ -1014,6 +1244,8 @@ function selectFilterMode(mode) {
   if (!['none','draw','circles'].includes(mode)) return;
   if (currentMode === mode) return;
   currentMode = mode;
+  // Reposition/hide ellipses immediately on mode change
+  updateWordPosition();
   const wrappers = Array.from(document.querySelectorAll('#filters-bar .filter-wrapper'));
   const order = ['none','circles','draw'];
   // Normalize active

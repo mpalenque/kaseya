@@ -501,6 +501,23 @@ body {
   pointer-events: none; /* sólo botones clickeables */
 }
 
+/* Draw ellipses behind the banner (true rings rendered via inline SVG) */
+.draw-ellipse {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background: transparent;
+  border: none; /* ring stroke is drawn by SVG inside */
+  box-shadow: none;
+  filter: none;
+  opacity: 0;
+  transition: opacity .12s ease;
+  pointer-events: none;
+}
+.draw-ellipse.ellipse-purple { color: #AA3BFF; border-color: #AA3BFF; }
+.draw-ellipse.ellipse-cyan { color: #00F0FF; border-color: #00F0FF; }
+
 /* Mobile devices general positioning adjustment */
 @media screen and (max-width: 768px) and (orientation: portrait) {
   .preview-actions {
