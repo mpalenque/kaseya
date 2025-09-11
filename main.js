@@ -29,7 +29,9 @@ let isSpinning = false;
 let recorder, recordedChunks = [], isRecording = false, recordStartTs = 0;
 let progressInterval, recordRAF = 0;
 let currentFile = null;
-let animationId;
+let animationId; // legacy
+let detectionRAF = 0; // new RAF for detection
+let renderRAF = 0; // new RAF for rendering
 let permanentWordElement = null;
 // Long-press / freeze recording behavior
 let pressTimer; // existing usage
@@ -57,34 +59,34 @@ let groupPitch = 0; // rotación X (inclinación arriba/abajo)
 // Smoothing variables for word tracking
 let smoothWordX = window.innerWidth * 0.5; // Smoothed X position
 let smoothWordY = window.innerHeight * 0.1; // Smoothed Y position
-const WORD_SMOOTHING_FACTOR = 0.15; // Lower = more smooth, higher = more responsive
-// Even smaller font sizes (fixed banner appearance in recording)
-const WORD_BANNER_MIN_FONT = 6; // px
-const WORD_BANNER_MAX_FONT = 14; // px
+const WORD_SMOOTHING_FACTOR = 0.25; // a bit more responsive for smoother feel
+// Larger font limits so the inner text appears bigger in realtime and recording
+const WORD_BANNER_MIN_FONT = 12; // px
+const WORD_BANNER_MAX_FONT = 36; // px
 const WORD_BANNER_LINE_HEIGHT = 1.15;
 
 // Performance / tuning constants
 const TARGET_RECORD_FPS = 30; // Aumentar fluidez de salida
-const DETECTION_INTERVAL_MS = 66; // ~15 FPS detección para reducir carga
+const DETECTION_INTERVAL_MS = 85; // ~11-12 FPS detección (lighter on CPU); rendering is decoupled
 let lastDetectionTs = 0;
 let lastCompositeFrameTs = 0;
 
 // Word pool for the roulette
 const words = [
-  'Debugging Wizard',
-  'Captain Stack Overflow',
-  'Deadline Denier',
-  'Sir Talks-a-Lot (in Meetings)',
-  'CSS Sorcerer',
-  'Network Ninja',
-  'Tab Hoarder',
-  'Mad Dev Scientist',
-  'The Code Poet',
-  'WiFi Wizard',
-  'Cloud Prophet',
-  'Meme Lord',
-  'Tech Legend',
-  'Ticket Slayer'
+  'Debugging Wizard 🧙‍♂️',
+  'Captain Stack Overflow 🧠',
+  'Deadline Denier⏳',
+  'Sir Talks-a-Lot (in Meetings)🎙️',
+  'CSS Sorcerer 🎨',
+  'Network Ninja⚡',
+  'Tab Hoarder🧾',
+  'Mad Dev Scientist 🧪',
+  'The Code Poet🖋️',
+  'WiFi Wizard 📶',
+  'Cloud Prophet ☁️',
+  'Meme Lord 👑',
+  'Tech Legend 🤘',
+  'Ticket Slayer 🏴‍☠️'
 ];
 
 // Add footer image preloading
@@ -178,6 +180,7 @@ async function initFaceDetection() {
 }
 
 function startDetectionLoop() {
+  // Separate detection (throttled) and rendering (every frame) for smoother UI
   async function detectFaces() {
     const now = performance.now();
     if (webcamEl.videoWidth > 0 && webcamEl.videoHeight > 0 && (now - lastDetectionTs) >= DETECTION_INTERVAL_MS) {
@@ -188,12 +191,18 @@ function startDetectionLoop() {
       } catch (error) {
         // Silenciar errores intermitentes para mantener FPS
       }
-      drawOverlay();
     }
-    animationId = requestAnimationFrame(detectFaces);
+    detectionRAF = requestAnimationFrame(detectFaces);
   }
-  
+
+  function renderFrame() {
+    drawOverlay(); // updates position every frame using smoothing
+    renderRAF = requestAnimationFrame(renderFrame);
+  }
+
+  // Start both loops
   detectFaces();
+  renderFrame();
 }
 
 function createPermanentWordElement() {
@@ -206,9 +215,12 @@ function createPermanentWordElement() {
   permanentWordElement.appendChild(inner);
   permanentWordElement.style.position = 'fixed';
   permanentWordElement.style.left = '50%';
-  permanentWordElement.style.top = '20%';
+  permanentWordElement.style.top = '16%'; // raise relative to face when no detection yet
   permanentWordElement.style.transform = 'translateX(-50%)';
   permanentWordElement.style.zIndex = '15';
+  // Nudge size up a bit immediately; CSS will still govern but helps initial render
+  permanentWordElement.style.width = '380px';
+  permanentWordElement.style.height = '130px';
   document.body.appendChild(permanentWordElement);
   autoFitWordBanner();
 }
@@ -253,11 +265,11 @@ function updateWordPosition() {
     const screenX = offsetX + (faceCenterX / vw) * displayW;
     const screenTopY = offsetY + (faceTopY / vh) * displayH;
 
-    // Place word well above eyes: use 0.6 of face height above top, clamp to min margin
+  // Place word well above eyes: use 0.8 of face height above top, clamp to min margin
     const faceHeightScreen = (b.height / vh) * displayH;
-    const desiredY = screenTopY - faceHeightScreen * 0.6; // 60% of face height above top
+  const desiredY = screenTopY - faceHeightScreen * 0.8; // raise the banner higher
 
-    const marginTop = 10; // px from top to avoid leaving the screen
+  const marginTop = 22; // allow a bit more padding from very top
     const clampedY = Math.max(marginTop, desiredY);
 
     // Set target positions
@@ -272,8 +284,13 @@ function updateWordPosition() {
   }
 
   // Apply smooth interpolation
-  smoothWordX += (targetX - smoothWordX) * WORD_SMOOTHING_FACTOR;
-  smoothWordY += (targetY - smoothWordY) * WORD_SMOOTHING_FACTOR;
+  const dx = targetX - smoothWordX;
+  const dy = targetY - smoothWordY;
+  // Adaptive smoothing: larger steps when far, smaller when near
+  const dist = Math.hypot(dx, dy);
+  const factor = Math.min(0.45, WORD_SMOOTHING_FACTOR + (dist / 500) * 0.15);
+  smoothWordX += dx * factor;
+  smoothWordY += dy * factor;
 
   // Update element position with smoothed values
   permanentWordElement.style.left = `${smoothWordX}px`;
@@ -282,10 +299,9 @@ function updateWordPosition() {
 }
 
 function stopDetectionLoop() {
-  if (animationId) {
-    cancelAnimationFrame(animationId);
-    animationId = null;
-  }
+  if (animationId) { cancelAnimationFrame(animationId); animationId = null; }
+  if (detectionRAF) { cancelAnimationFrame(detectionRAF); detectionRAF = 0; }
+  if (renderRAF) { cancelAnimationFrame(renderRAF); renderRAF = 0; }
 }
 
 function drawOverlay() {
