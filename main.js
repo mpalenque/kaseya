@@ -251,6 +251,9 @@ function createDrawEllipses() {
   // Start hidden until positioned
   ellipsePurple.style.opacity = '0';
   ellipseCyan.style.opacity = '0';
+  // Hide DOM SVG rings to avoid duplication; we'll render rings on the overlay canvas so they are captured
+  ellipsePurple.style.display = 'none';
+  ellipseCyan.style.display = 'none';
 }
 
 function updateWordPosition() {
@@ -553,18 +556,18 @@ function drawOverlay() {
   }
 
   // Draw rings on canvas so they are included in recorded captures
-  drawRingsOnCanvas(ctx);
+  drawRings(ctx, canvas.width, canvas.height);
 }
 
 // Draw animated rings into the overlay canvas (so composeFrame includes them)
-function drawRingsOnCanvas(ctx) {
+function drawRings(ctx, canvasWidth, canvasHeight) {
   if (!permanentWordElement) return;
   if (currentMode !== 'draw') return;
 
   const bannerW = permanentWordElement.clientWidth || 360;
   const bannerH = permanentWordElement.clientHeight || 120;
-  const centerX = smoothWordX;
-  const bannerBottomY = smoothWordY + bannerH;
+  const centerX = smoothWordX; // screen px
+  const bannerBottomY = smoothWordY + bannerH; // screen px
   const lift = Math.round(bannerH * 0.10);
 
   const ring1W = Math.round(bannerW * 1.25 * RING_WIDTH_SCALE);
@@ -572,7 +575,18 @@ function drawRingsOnCanvas(ctx) {
   const ring2W = ring1W;
   const ring2H = ring1H;
 
-  // animation params (same as DOM animation)
+  // Map screen coordinates to canvas pixel coordinates
+  const scaleX = canvasWidth / window.innerWidth;
+  const scaleY = canvasHeight / window.innerHeight;
+  const cx = centerX * scaleX;
+  const bannerBottomYc = bannerBottomY * scaleY;
+  const liftC = Math.round(lift * scaleY);
+  const rxP = (ring1W / 2) * scaleX;
+  const ryP = (ring1H / 2) * scaleY;
+  const rxC = rxP;
+  const ryC = ryP;
+
+  // animation params
   const rotAmp = 1.2; // degrees
   const bobAmp = 3.5; // px
   const rotFreq = 0.35; // cycles/sec
@@ -585,34 +599,28 @@ function drawRingsOnCanvas(ctx) {
   const baseP = RING_ANGLE_BASE + (RING_ANGLE_DELTA / 2);
   const animRotP = Math.sin(2 * Math.PI * rotFreq * t + phasePurple) * rotAmp;
   const animBobP = Math.sin(2 * Math.PI * bobFreq * t + phasePurple) * bobAmp;
-  const centerYP = bannerBottomY + ring1H / 2 + RING_Y_OFFSET - lift + animBobP;
-  const rxP = ring1W / 2;
-  const ryP = ring1H / 2;
+  const centerYP = bannerBottomYc + (ring1H / 2) * scaleY + (RING_Y_OFFSET * scaleY) - liftC + (animBobP * scaleY);
   const angleP = (baseP + animRotP) * (Math.PI / 180);
 
   // cyan
   const baseC = RING_ANGLE_BASE - (RING_ANGLE_DELTA / 2);
   const animRotC = Math.sin(2 * Math.PI * rotFreq * t + phaseCyan) * rotAmp * 0.9;
   const animBobC = Math.sin(2 * Math.PI * bobFreq * t + phaseCyan) * bobAmp * 0.9;
-  const centerYC = bannerBottomY + ring2H / 2 + RING_Y_OFFSET - lift + animBobC;
-  const rxC = ring2W / 2;
-  const ryC = ring2H / 2;
+  const centerYC = bannerBottomYc + (ring2H / 2) * scaleY + (RING_Y_OFFSET * scaleY) - liftC + (animBobC * scaleY);
   const angleC = (baseC + animRotC) * (Math.PI / 180);
 
-  // Draw onto overlay canvas
   ctx.save();
-  ctx.lineWidth = 4;
+  ctx.lineWidth = Math.max(1, 4 * ((scaleX + scaleY) / 2));
   ctx.lineCap = 'round';
-  // Purple stroke
+
   ctx.strokeStyle = '#AA3BFF';
   ctx.beginPath();
-  ctx.ellipse(centerX, centerYP, rxP, ryP, angleP, 0, Math.PI * 2);
+  ctx.ellipse(cx, centerYP, rxP, ryP, angleP, 0, Math.PI * 2);
   ctx.stroke();
 
-  // Cyan stroke
   ctx.beginPath();
   ctx.strokeStyle = '#00F0FF';
-  ctx.ellipse(centerX, centerYC, rxC, ryC, angleC, 0, Math.PI * 2);
+  ctx.ellipse(cx, centerYC, rxC, ryC, angleC, 0, Math.PI * 2);
   ctx.stroke();
 
   ctx.restore();
@@ -987,7 +995,7 @@ function beginCompositeRecording() {
       if (webcamEl.videoWidth) {
         drawWebcamCover(ctx, webcamEl, composed.width, composed.height);
       }
-      await captureHTMLElements(ctx, composed.width, composed.height);
+  await captureHTMLElements(ctx, composed.width, composed.height);
       // After drawing dynamic content, if freeze was requested mid-loop ensure we capture once
       if (freezeActive && !freezeFrame) {
         freezeFrame = document.createElement('canvas');
@@ -1068,32 +1076,8 @@ async function captureHTMLElements(ctx, canvasWidth, canvasHeight) {
     }
   }
   
-  // Draw rings
-  const ringsContainer = document.querySelector('.face-rings');
-  if (ringsContainer && ringsContainer.style.display !== 'none') {
-    const ringsRect = ringsContainer.getBoundingClientRect();
-    const rings = ringsContainer.querySelectorAll('.ring');
-    
-    rings.forEach(ring => {
-      const ringRect = ring.getBoundingClientRect();
-      const x = ringRect.left * scaleX;
-      const y = ringRect.top * scaleY;
-      const width = ringRect.width * scaleX;
-      const height = ringRect.height * scaleY;
-      
-      // Get computed styles
-      const styles = window.getComputedStyle(ring);
-      const borderColor = styles.borderColor;
-      const borderWidth = parseInt(styles.borderWidth) * Math.min(scaleX, scaleY);
-      
-      // Draw ring
-      ctx.strokeStyle = borderColor;
-      ctx.lineWidth = borderWidth;
-      ctx.beginPath();
-      ctx.ellipse(x + width/2, y + height/2, width/2 - borderWidth/2, height/2 - borderWidth/2, 0, 0, Math.PI * 2);
-      ctx.stroke();
-    });
-  }
+  // Draw animated rings into the composite capture
+  drawRings(ctx, canvasWidth, canvasHeight);
   
   // Draw text (only if not in particles mode)
   if (!particlesMode && permanentWordElement && permanentWordElement.style.opacity !== '0') {
