@@ -1,0 +1,13 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Start local server for testhead",
+			"type": "shell",
+			"command": "python3 -m http.server 8000",
+			"args": [],
+			"isBackground": true,
+			"group": "build"
+		}
+	]
+}
