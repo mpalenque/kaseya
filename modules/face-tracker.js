@@ -318,7 +318,17 @@ class FaceTracker {
     
     if (this.mirrorVideoX) xNorm = 1 - xNorm;
     
-    return { x: xNorm * 2 - 1, y: (1 - yNorm) * 2 - 1 };
+    // Apply device-specific corrections for better alignment
+    let xFinal = xNorm * 2 - 1;
+    let yFinal = (1 - yNorm) * 2 - 1;
+    
+    // iPhone-specific Y offset correction for better occlusion alignment
+    const isIPhone = /iPhone/i.test(navigator.userAgent);
+    if (isIPhone) {
+      yFinal += 0.15; // Adjust Y position downward for iPhone (positive moves down in NDC)
+    }
+    
+    return { x: xFinal, y: yFinal };
   }
 
   getCurrentFaces() {

@@ -21,22 +21,29 @@ class DrawGame {
     this.WORD_BANNER_LINE_HEIGHT = 1.15;
     
     // Ring tuning parameters
-    this.RING_WIDTH_SCALE = 0.83;
-    this.RING_HEIGHT_SCALE = 1.5;
-    this.RING_ANGLE_BASE = -3;
-  this.RING_ANGLE_DELTA = 4.5; // increase separation/phase between rings for 3D appearance
+    this.RING_WIDTH_SCALE = 0.83;         // Width: 83%
+    this.RING_HEIGHT_SCALE = 1.5;         // Height: 150%
+    this.RING_ANGLE_BASE = -3;            // Rotation: -3.0°
+  this.RING_ANGLE_DELTA = 20.0;           // Delta rotation: 20.0°
     this.RING_Y_OFFSET = -14;
   // 3D ring advanced tuning
-  this.RING_SCALE_MULT = 2.0;            // overall 3D ring size multiplier
+  this.RING_SCALE_MULT = 2.65;           // 3D Size: 265%
   // 3-axis rotation in radians (apply after head alignment)
-  this.RING_ROT_X_RAD = -0.3;            // forward tilt around X (negative tilts toward camera)
-  this.RING_ROT_Y_RAD = 0.0;             // yaw around Y
-  this.RING_ROT_Z_RAD = 0.0;             // roll around Z
-  this.RING_UP_OFFSET_FACTOR = 0.95;     // forehead height factor (× face radius)
-  this.RING_UP_EXTRA_PX = 0;             // extra vertical offset in screen pixels (fine adjust)
-  this.RING_BEHIND_OFFSET_FACTOR = 0.18; // distance behind face along forward vector (× face radius)
-  this.RING_Z_SEPARATION = 0.05;         // local Z separation factor (× scaleBase)
-  this.RING_CYAN_ROT_Z_OFFSET = 0.6;     // extra z-rotation offset for cyan ring (radians)
+  this.RING_ROT_X_RAD = 25 * Math.PI / 180;  // Rot X: 25°
+  this.RING_ROT_Y_RAD = 0.0;                  // Rot Y: 0°
+  this.RING_ROT_Z_RAD = 0.0;                  // Rot Z: 0°
+  this.RING_UP_OFFSET_FACTOR = 1.51;          // Base Height: 151%
+  this.RING_UP_EXTRA_PX = 275;                // Extra Height: 275px
+  this.RING_LOCAL_Y_OFFSET_FACTOR = 0.0;     // extra vertical offset in units of face radius (applied along local Y)
+  this.RING_BEHIND_OFFSET_FACTOR = 0.80;     // Depth: 80%
+  this.RING_Z_SEPARATION = 0.35;             // Z Separation: 35% (more separation)
+  this.RING_CYAN_ROT_Z_OFFSET = 0.6;         // extra z-rotation offset for cyan ring (radians)
+  this.RING_INDIVIDUAL_ROT_OFFSET = 180 * Math.PI / 180; // Individual Rotation Offset: 180°
+  this.RING_LFO_AMPLITUDE = 10 * Math.PI / 180;          // LFO Amplitude: 10° (reduced for subtlety)
+  this.RING_LFO_FREQUENCY = 1.5;                         // LFO Frequency: 1.5Hz (slower)
+  this.RING_LFO_PHASE_OFFSET = 360 * Math.PI / 180;      // LFO Phase: 360°
+  this.RING_PURPLE_ROTATION_SPEED = 0.1;                 // Purple Rot: 0.1x (slow smooth rotation)
+  this.RING_CYAN_ROTATION_SPEED = -0.15;                 // Cyan Rot: -0.15x (opposite direction, slightly faster)
     
     // Ring animation
     this.ringAnimRAF = 0;
@@ -195,7 +202,7 @@ class DrawGame {
   this.ring3DCyan.rotation.x = Math.PI / 2;
 
   // Slightly rotate the second ring so they don't perfectly overlap
-  this.ring3DCyan.rotation.z = this.RING_CYAN_ROT_Z_OFFSET; // configurable offset between rings
+  this.ring3DCyan.rotation.z = this.RING_CYAN_ROT_Z_OFFSET + this.RING_INDIVIDUAL_ROT_OFFSET; // configurable offset between rings
 
   // Render order: keep them after occluder (occluder uses renderOrder -1/0), so set > 0
   this.ring3DPurple.renderOrder = 1;
@@ -215,7 +222,7 @@ class DrawGame {
   }
 
   update3DRingsPosition() {
-    if (!this.faceTracker) return;
+    if (!this.faceTracker || !this.permanentWordElement) return;
     const ft = this.faceTracker;
     // Ensure rings created when scene becomes available
     if (!this.ring3DGroup && ft.scene && window.THREE) {
@@ -230,37 +237,34 @@ class DrawGame {
       return;
     }
 
-    // Position rings relative to head / face collider
+    // Use face tracking for ring positioning (more stable)
     const center = ft.faceColliderCenter ? ft.faceColliderCenter.clone() : (ft.getHeadPosition ? ft.getHeadPosition().world : new THREE.Vector3(0,0,3));
     const radius = ft.faceColliderRadius || (ft.getHeadPosition ? ft.getHeadPosition().colliderRadius : 0.8);
 
-    // Place rings slightly above forehead (y up)
-  let upOffset = radius * this.RING_UP_OFFSET_FACTOR; // base forehead height in world units
-  // Add extra vertical offset converted from screen pixels to world units using face bounds heuristic
-  try {
-    const bounds = ft.getFaceBoundingBox ? ft.getFaceBoundingBox() : null;
-    if (bounds && bounds.height) {
-      const worldPerPixel = (radius * 2) / bounds.height; // approx: collider diameter maps to face pixel height
-      upOffset += (this.RING_UP_EXTRA_PX || 0) * worldPerPixel;
-    }
-  } catch(e) {}
+    // Calculate upward offset that follows face tracking exactly
+    // Use actual face radius for proper proportional scaling
+    let upOffset = radius * this.RING_UP_OFFSET_FACTOR;
+    
+    // Add extra vertical offset that scales appropriately with face tracking
+    // Use a scaling that makes the offset meaningful but still proportional to face size
+    const pixelToWorldScale = radius * 0.04; // 10x stronger scaling for more visible offset control
+    upOffset += (this.RING_UP_EXTRA_PX || 0) * pixelToWorldScale;
 
-    // If headOccluderRoot is available, position rings relative to occluder's world transform so they rotate/translate with the head
+    // Position rings based on face tracking
     if (ft.headOccluderRoot) {
       try {
         const root = ft.headOccluderRoot;
-        // use headPosSmoothed if available
-        const headPos = ft.headPosSmoothed ? ft.headPosSmoothed.clone() : center.clone();
-        // forward direction in world space from occluder orientation
+        const pos = center.clone();
+        const upWorld = new THREE.Vector3(0, 1, 0).applyQuaternion(root.quaternion).normalize();
         const forwardWorld = new THREE.Vector3(0, 0, 1).applyQuaternion(root.quaternion).normalize();
-        // move slightly behind the face along forwardWorld (negative direction)
-  const behindOffset = radius * this.RING_BEHIND_OFFSET_FACTOR; // configurable depth
-  const upWorld = new THREE.Vector3(0, 1, 0).applyQuaternion(root.quaternion).normalize();
-  const pos = headPos.clone().addScaledVector(forwardWorld, -behindOffset);
-  // Move upward relative to the head orientation
-  pos.addScaledVector(upWorld, upOffset);
+        
+        // Apply offsets
+        const behindOffset = radius * this.RING_BEHIND_OFFSET_FACTOR;
+        pos.addScaledVector(forwardWorld, -behindOffset);
+        pos.addScaledVector(upWorld, upOffset);
+        
         this.ring3DGroup.position.copy(pos);
-
+        
         // Align the ring group's normal (Z) to forwardWorld so the ring stands vertically around the head
         const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), forwardWorld);
         this.ring3DGroup.quaternion.copy(q);
@@ -270,21 +274,9 @@ class DrawGame {
           const qRot = new THREE.Quaternion().setFromEuler(eul);
           this.ring3DGroup.quaternion.multiply(qRot);
         } catch(e) {}
-        // Also add a small local Y offset proportional to extra PX to make the control visibly affect height
-        // Convert px to approx world units using bounds heuristic computed above
-        try {
-          const bounds = ft.getFaceBoundingBox ? ft.getFaceBoundingBox() : null;
-          if (bounds && bounds.height) {
-            const worldPerPixel = (radius * 2) / bounds.height;
-            const localYOffset = (this.RING_UP_EXTRA_PX || 0) * worldPerPixel;
-            // Move along the group's local Y axis
-            const localUp = new THREE.Vector3(0, 1, 0).applyQuaternion(this.ring3DGroup.quaternion).normalize();
-            this.ring3DGroup.position.addScaledVector(localUp, localYOffset);
-          }
-        } catch(e) {}
       } catch (e) {
         // fallback to camera-based method below
-  const behindOffset = radius * this.RING_BEHIND_OFFSET_FACTOR;
+        const behindOffset = radius * this.RING_BEHIND_OFFSET_FACTOR;
         if (ft.camera && ft.camera.position) {
           const camDir = center.clone().sub(ft.camera.position).normalize();
           const upWorld = ft.camera.up ? ft.camera.up.clone().normalize() : new THREE.Vector3(0,1,0);
@@ -306,7 +298,7 @@ class DrawGame {
       }
     } else {
       // Compute a camera-relative offset so rings sit behind the face (away from the camera)
-  let behindOffset = radius * this.RING_BEHIND_OFFSET_FACTOR;
+      let behindOffset = radius * this.RING_BEHIND_OFFSET_FACTOR;
       if (ft.camera && ft.camera.position) {
         const camDir = center.clone().sub(ft.camera.position).normalize();
         const upWorld = ft.camera.up ? ft.camera.up.clone().normalize() : new THREE.Vector3(0,1,0);
@@ -325,25 +317,19 @@ class DrawGame {
         const eul = new THREE.Euler(this.RING_ROT_X_RAD, this.RING_ROT_Y_RAD, this.RING_ROT_Z_RAD, 'XYZ');
         const qRot = new THREE.Quaternion().setFromEuler(eul);
         this.ring3DGroup.quaternion.multiply(qRot);
-      } catch (e3) {}
-      // Add local Y offset in fallback too
-      try {
-        const bounds = ft.getFaceBoundingBox ? ft.getFaceBoundingBox() : null;
-        if (bounds && bounds.height) {
-          const worldPerPixel = (radius * 2) / bounds.height;
-          const localYOffset = (this.RING_UP_EXTRA_PX || 0) * worldPerPixel;
-          const localUp = new THREE.Vector3(0, 1, 0).applyQuaternion(this.ring3DGroup.quaternion).normalize();
-          this.ring3DGroup.position.addScaledVector(localUp, localYOffset);
-        }
-      } catch(e) {}
+      } catch (e) {}
     }
+
+
 
     // Offset individual rings slightly so they don't perfectly overlap
     this.ring3DPurple.position.set(0, 0, 0);
     this.ring3DCyan.position.set(0, 0, 0);
 
-    // Scale rings according to face width / radius
-  const scaleBase = Math.max(0.35, radius * 1.15);
+    // Scale rings to match face tracking exactly
+    // Use actual face radius for proportional scaling that follows face size
+    const scaleBase = Math.max(0.35, radius * 1.15);
+    
     // Apply configurable overall 3D size multiplier
     this.ring3DPurple.scale.setScalar(scaleBase * this.RING_WIDTH_SCALE * this.RING_SCALE_MULT);
     this.ring3DCyan.scale.setScalar(scaleBase * (this.RING_WIDTH_SCALE * 1.05) * this.RING_SCALE_MULT);
@@ -403,7 +389,11 @@ class DrawGame {
             const baseP = (this.RING_ANGLE_BASE + (this.RING_ANGLE_DELTA / 2)) * (Math.PI / 180);
             const animRot = Math.sin(2 * Math.PI * rotFreq * t + phasePurple) * (rotAmp * Math.PI / 180);
             const animBob = Math.sin(2 * Math.PI * bobFreq * t + phasePurple) * (bobAmp * 0.01); // convert px -> world approx
-            this.ring3DPurple.rotation.z = baseP + animRot;
+            // Add LFO rotation
+            const lfoRot = Math.sin(2 * Math.PI * this.RING_LFO_FREQUENCY * t) * this.RING_LFO_AMPLITUDE;
+            // Add individual rotation speed (accumulated over time)
+            const individualRot = this.RING_PURPLE_ROTATION_SPEED * 2 * Math.PI * t;
+            this.ring3DPurple.rotation.z = baseP + animRot + lfoRot + individualRot;
             this.ring3DPurple.position.y = animBob * 0.5;
           }
 
@@ -412,7 +402,11 @@ class DrawGame {
             const baseC = (this.RING_ANGLE_BASE - (this.RING_ANGLE_DELTA / 2)) * (Math.PI / 180);
             const animRot = Math.sin(2 * Math.PI * rotFreq * t + phaseCyan) * (rotAmp * 0.9 * Math.PI / 180);
             const animBob = Math.sin(2 * Math.PI * bobFreq * t + phaseCyan) * (bobAmp * 0.009);
-            this.ring3DCyan.rotation.z = baseC + animRot;
+            // Add LFO rotation with phase offset
+            const lfoRot = Math.sin(2 * Math.PI * this.RING_LFO_FREQUENCY * t + this.RING_LFO_PHASE_OFFSET) * this.RING_LFO_AMPLITUDE;
+            // Add individual rotation speed (accumulated over time)
+            const individualRot = this.RING_CYAN_ROTATION_SPEED * 2 * Math.PI * t;
+            this.ring3DCyan.rotation.z = baseC + animRot + this.RING_CYAN_ROT_Z_OFFSET + this.RING_INDIVIDUAL_ROT_OFFSET + lfoRot + individualRot;
             this.ring3DCyan.position.y = animBob * 0.5;
           }
         } catch (e) {
@@ -491,7 +485,7 @@ class DrawGame {
       </div>
       <div class="rt-row" style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
         <label style="white-space:nowrap;">Altura extra (px)
-          <input id="rt-3d-upx" type="range" min="-200" max="200" step="1" value="${this.RING_UP_EXTRA_PX}" style="vertical-align:middle; width: 160px; margin-left:6px;">
+          <input id="rt-3d-upx" type="range" min="-1000" max="1000" step="5" value="${this.RING_UP_EXTRA_PX}" style="vertical-align:middle; width: 160px; margin-left:6px;">
         </label>
         <span id="rt-3d-upx-val" style="min-width:56px; text-align:right; display:inline-block;">${this.RING_UP_EXTRA_PX}px</span>
       </div>
@@ -501,11 +495,47 @@ class DrawGame {
         </label>
         <span id="rt-3d-depth-val" style="min-width:56px; text-align:right; display:inline-block;">${Math.round(this.RING_BEHIND_OFFSET_FACTOR*100)}%</span>
       </div>
-      <div class="rt-row" style="display:flex; align-items:center; gap:8px;">
+      <div class="rt-row" style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
         <label style="white-space:nowrap;">Separación Z
           <input id="rt-3d-zsep" type="range" min="0" max="20" step="0.5" value="${(this.RING_Z_SEPARATION*100).toFixed(0)}" style="vertical-align:middle; width: 160px; margin-left:6px;">
         </label>
         <span id="rt-3d-zsep-val" style="min-width:56px; text-align:right; display:inline-block;">${(this.RING_Z_SEPARATION*100).toFixed(0)}%</span>
+      </div>
+      <div class="rt-row" style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+        <label style="white-space:nowrap;">Offset rotación individual (°)
+          <input id="rt-3d-indrot" type="range" min="-180" max="180" step="1" value="${Math.round(this.RING_INDIVIDUAL_ROT_OFFSET*180/Math.PI)}" style="vertical-align:middle; width: 160px; margin-left:6px;">
+        </label>
+        <span id="rt-3d-indrot-val" style="min-width:56px; text-align:right; display:inline-block;">${Math.round(this.RING_INDIVIDUAL_ROT_OFFSET*180/Math.PI)}°</span>
+      </div>
+      <div class="rt-row" style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+        <label style="white-space:nowrap;">LFO Amplitud (°)
+          <input id="rt-lfo-amp" type="range" min="0" max="90" step="1" value="${Math.round(this.RING_LFO_AMPLITUDE*180/Math.PI)}" style="vertical-align:middle; width: 160px; margin-left:6px;">
+        </label>
+        <span id="rt-lfo-amp-val" style="min-width:56px; text-align:right; display:inline-block;">${Math.round(this.RING_LFO_AMPLITUDE*180/Math.PI)}°</span>
+      </div>
+      <div class="rt-row" style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+        <label style="white-space:nowrap;">LFO Frecuencia (Hz)
+          <input id="rt-lfo-freq" type="range" min="0.1" max="5.0" step="0.1" value="${this.RING_LFO_FREQUENCY.toFixed(1)}" style="vertical-align:middle; width: 160px; margin-left:6px;">
+        </label>
+        <span id="rt-lfo-freq-val" style="min-width:56px; text-align:right; display:inline-block;">${this.RING_LFO_FREQUENCY.toFixed(1)}Hz</span>
+      </div>
+      <div class="rt-row" style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+        <label style="white-space:nowrap;">LFO Desfase (°)
+          <input id="rt-lfo-phase" type="range" min="0" max="360" step="5" value="${Math.round(this.RING_LFO_PHASE_OFFSET*180/Math.PI)}" style="vertical-align:middle; width: 160px; margin-left:6px;">
+        </label>
+        <span id="rt-lfo-phase-val" style="min-width:56px; text-align:right; display:inline-block;">${Math.round(this.RING_LFO_PHASE_OFFSET*180/Math.PI)}°</span>
+      </div>
+      <div class="rt-row" style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+        <label style="white-space:nowrap;">Rot. Púrpura (rev/s)
+          <input id="rt-purple-speed" type="range" min="-2.0" max="2.0" step="0.1" value="${this.RING_PURPLE_ROTATION_SPEED.toFixed(1)}" style="vertical-align:middle; width: 160px; margin-left:6px;">
+        </label>
+        <span id="rt-purple-speed-val" style="min-width:56px; text-align:right; display:inline-block;">${this.RING_PURPLE_ROTATION_SPEED.toFixed(1)}</span>
+      </div>
+      <div class="rt-row" style="display:flex; align-items:center; gap:8px;">
+        <label style="white-space:nowrap;">Rot. Cyan (rev/s)
+          <input id="rt-cyan-speed" type="range" min="-2.0" max="2.0" step="0.1" value="${this.RING_CYAN_ROTATION_SPEED.toFixed(1)}" style="vertical-align:middle; width: 160px; margin-left:6px;">
+        </label>
+        <span id="rt-cyan-speed-val" style="min-width:56px; text-align:right; display:inline-block;">${this.RING_CYAN_ROTATION_SPEED.toFixed(1)}</span>
       </div>
     `;
 
@@ -525,7 +555,7 @@ class DrawGame {
     yRow.style.cssText = 'display:flex; align-items:center; gap:8px; margin-top:6px;';
     yRow.innerHTML = `
       <label style="white-space:nowrap;">Offset Y (px)
-        <input id="rt-y" type="range" min="-80" max="120" step="1" value="${this.RING_Y_OFFSET}" style="vertical-align:middle; width:160px; margin-left:6px;">
+        <input id="rt-y" type="range" min="-1000" max="1000" step="5" value="${this.RING_Y_OFFSET}" style="vertical-align:middle; width:160px; margin-left:6px;">
       </label>
       <span id="rt-y-val" style="min-width:46px; text-align:right; display:inline-block;">${this.RING_Y_OFFSET}px</span>
     `;
@@ -591,10 +621,12 @@ class DrawGame {
     y.addEventListener('input', (e) => {
       this.RING_Y_OFFSET = parseInt(e.target.value, 10) || 0;
       yVal.textContent = `${this.RING_Y_OFFSET}px`;
-      // Map 2D Y offset slider to 3D extra vertical offset in px so it affects 3D rings too
+      // Keep px-based slider in sync
       this.RING_UP_EXTRA_PX = this.RING_Y_OFFSET;
       if (upxMirror) upxMirror.value = String(this.RING_UP_EXTRA_PX);
       if (upxMirrorVal) upxMirrorVal.textContent = `${this.RING_UP_EXTRA_PX}px`;
+      // Force position update to apply the new Y offset immediately
+      console.log(`Y Offset changed to: ${this.RING_UP_EXTRA_PX}px`);
       try { this.update3DRingsPosition(); } catch(e) {}
       refresh();
     });
@@ -615,13 +647,23 @@ class DrawGame {
     const upxVal = panel.querySelector('#rt-3d-upx-val');
     const depth = panel.querySelector('#rt-3d-depth');
     const depthVal = panel.querySelector('#rt-3d-depth-val');
-  const zsep = panel.querySelector('#rt-3d-zsep');
-  const zsepVal = panel.querySelector('#rt-3d-zsep-val');
-  // Cross-link to legacy Y offset controls for sync
-  const yMirror = panel.querySelector('#rt-y');
-  const yMirrorVal = panel.querySelector('#rt-y-val');
-
-    const refreshVals = () => {
+    const zsep = panel.querySelector('#rt-3d-zsep');
+    const zsepVal = panel.querySelector('#rt-3d-zsep-val');
+    const indrot = panel.querySelector('#rt-3d-indrot');
+    const indrotVal = panel.querySelector('#rt-3d-indrot-val');
+    const lfoAmp = panel.querySelector('#rt-lfo-amp');
+    const lfoAmpVal = panel.querySelector('#rt-lfo-amp-val');
+    const lfoFreq = panel.querySelector('#rt-lfo-freq');
+    const lfoFreqVal = panel.querySelector('#rt-lfo-freq-val');
+    const lfoPhase = panel.querySelector('#rt-lfo-phase');
+    const lfoPhaseVal = panel.querySelector('#rt-lfo-phase-val');
+    const purpleSpeed = panel.querySelector('#rt-purple-speed');
+    const purpleSpeedVal = panel.querySelector('#rt-purple-speed-val');
+    const cyanSpeed = panel.querySelector('#rt-cyan-speed');
+    const cyanSpeedVal = panel.querySelector('#rt-cyan-speed-val');
+    // Cross-link to legacy Y offset controls for sync
+    const yMirror = panel.querySelector('#rt-y');
+    const yMirrorVal = panel.querySelector('#rt-y-val');    const refreshVals = () => {
       scaleVal.textContent = `${Math.round(this.RING_SCALE_MULT*100)}%`;
       rotxVal.textContent = `${Math.round(this.RING_ROT_X_RAD*180/Math.PI)}°`;
       rotyVal.textContent = `${Math.round(this.RING_ROT_Y_RAD*180/Math.PI)}°`;
@@ -630,6 +672,12 @@ class DrawGame {
       upxVal.textContent = `${this.RING_UP_EXTRA_PX}px`;
       depthVal.textContent = `${Math.round(this.RING_BEHIND_OFFSET_FACTOR*100)}%`;
       zsepVal.textContent = `${(this.RING_Z_SEPARATION*100).toFixed(0)}%`;
+      indrotVal.textContent = `${Math.round(this.RING_INDIVIDUAL_ROT_OFFSET*180/Math.PI)}°`;
+      lfoAmpVal.textContent = `${Math.round(this.RING_LFO_AMPLITUDE*180/Math.PI)}°`;
+      lfoFreqVal.textContent = `${this.RING_LFO_FREQUENCY.toFixed(1)}Hz`;
+      lfoPhaseVal.textContent = `${Math.round(this.RING_LFO_PHASE_OFFSET*180/Math.PI)}°`;
+      purpleSpeedVal.textContent = `${this.RING_PURPLE_ROTATION_SPEED.toFixed(1)}x`;
+      cyanSpeedVal.textContent = `${this.RING_CYAN_ROTATION_SPEED.toFixed(1)}x`;
     };
 
     const forceUpdate = () => { try { this.update3DRingsPosition(); } catch(e) {} };
@@ -666,11 +714,13 @@ class DrawGame {
     upx.addEventListener('input', (e) => {
       this.RING_UP_EXTRA_PX = parseInt(e.target.value, 10) || 0;
       refreshVals();
-      forceUpdate();
       // Keep legacy Y offset slider in sync so user perceives one control
       this.RING_Y_OFFSET = this.RING_UP_EXTRA_PX;
       if (yMirror) yMirror.value = String(this.RING_Y_OFFSET);
       if (yMirrorVal) yMirrorVal.textContent = `${this.RING_Y_OFFSET}px`;
+      // Force position update to apply the new Y offset immediately
+      console.log(`Y Offset updated to: ${this.RING_UP_EXTRA_PX}px`);
+      forceUpdate();
     });
 
     depth.addEventListener('input', (e) => {
@@ -683,6 +733,44 @@ class DrawGame {
       this.RING_Z_SEPARATION = Math.max(0, parseFloat(e.target.value) / 100);
       refreshVals();
       forceUpdate();
+    });
+
+    indrot.addEventListener('input', (e) => {
+      const deg = parseInt(e.target.value, 10) || 0;
+      this.RING_INDIVIDUAL_ROT_OFFSET = deg * Math.PI / 180;
+      refreshVals();
+      // Update the cyan ring rotation immediately
+      if (this.ring3DCyan) {
+        this.ring3DCyan.rotation.z = this.RING_CYAN_ROT_Z_OFFSET + this.RING_INDIVIDUAL_ROT_OFFSET;
+      }
+      forceUpdate();
+    });
+
+    lfoAmp.addEventListener('input', (e) => {
+      const deg = parseInt(e.target.value, 10) || 0;
+      this.RING_LFO_AMPLITUDE = deg * Math.PI / 180;
+      refreshVals();
+    });
+
+    lfoFreq.addEventListener('input', (e) => {
+      this.RING_LFO_FREQUENCY = Math.max(0.1, parseFloat(e.target.value) || 0.1);
+      refreshVals();
+    });
+
+    lfoPhase.addEventListener('input', (e) => {
+      const deg = parseInt(e.target.value, 10) || 0;
+      this.RING_LFO_PHASE_OFFSET = deg * Math.PI / 180;
+      refreshVals();
+    });
+
+    purpleSpeed.addEventListener('input', (e) => {
+      this.RING_PURPLE_ROTATION_SPEED = parseFloat(e.target.value) || 0;
+      refreshVals();
+    });
+
+    cyanSpeed.addEventListener('input', (e) => {
+      this.RING_CYAN_ROTATION_SPEED = parseFloat(e.target.value) || 0;
+      refreshVals();
     });
   }
 
