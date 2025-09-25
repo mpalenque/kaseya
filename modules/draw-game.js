@@ -413,39 +413,25 @@ class DrawGame {
           const zAmp = (this.RING_AUTO_ROT_Z_AMP_DEG || 7) * Math.PI / 180; // 7° default
           const zFreq = (this.RING_AUTO_ROT_Z_FREQ || 0.35); // Hz
           const zBase = (this.RING_ROT_Z_BASE_RAD || 0);
-          // Purple
+          // Purple (Z rotates only with base + back-and-forth osc)
           if (this.ring3DPurple) {
             const baseP = (this.RING_ANGLE_BASE + (this.RING_ANGLE_DELTA / 2)) * (Math.PI / 180);
-            const animRot = Math.sin(2 * Math.PI * rotFreq * t + phasePurple) * (rotAmp * Math.PI / 180);
             const animBob = Math.sin(2 * Math.PI * bobFreq * t + phasePurple) * (bobAmp * 0.01); // convert px -> world approx
-            // Add LFO rotation
-            const lfoRot = Math.sin(2 * Math.PI * this.RING_LFO_FREQUENCY * t) * this.RING_LFO_AMPLITUDE;
-            // Add individual rotation speed (accumulated over time)
-            const individualRot = this.RING_PURPLE_ROTATION_SPEED * 2 * Math.PI * t;
-            // Add gentle, independent Z rocking
-            const rockZ = Math.sin(2 * Math.PI * this.RING_ROCK_Z_FREQ_PURPLE * t) * this.RING_ROCK_Z_AMP;
             // Apply animated Z parameter directly (back-and-forth)
             const zOscPurple = this.RING_AUTO_ROT_Z_ENABLED ? (zAmp * Math.sin(2 * Math.PI * zFreq * t)) : 0;
             const zAnimPurple = zBase + zOscPurple;
-            this.ring3DPurple.rotation.z = baseP + animRot + lfoRot + individualRot + rockZ + zAnimPurple;
+            this.ring3DPurple.rotation.z = baseP + zAnimPurple;
             this.ring3DPurple.position.y = animBob * 0.5;
           }
 
-          // Cyan
+          // Cyan (Z rotates only with base + back-and-forth osc + phase offset)
           if (this.ring3DCyan) {
             const baseC = (this.RING_ANGLE_BASE - (this.RING_ANGLE_DELTA / 2)) * (Math.PI / 180);
-            const animRot = Math.sin(2 * Math.PI * rotFreq * t + phaseCyan) * (rotAmp * 0.9 * Math.PI / 180);
             const animBob = Math.sin(2 * Math.PI * bobFreq * t + phaseCyan) * (bobAmp * 0.009);
-            // Add LFO rotation with phase offset
-            const lfoRot = Math.sin(2 * Math.PI * this.RING_LFO_FREQUENCY * t + this.RING_LFO_PHASE_OFFSET) * this.RING_LFO_AMPLITUDE;
-            // Add individual rotation speed (accumulated over time)
-            const individualRot = this.RING_CYAN_ROTATION_SPEED * 2 * Math.PI * t;
-            // Add gentle, independent Z rocking (different frequency for de-phasing)
-            const rockZ = Math.sin(2 * Math.PI * this.RING_ROCK_Z_FREQ_CYAN * t + 0.37) * this.RING_ROCK_Z_AMP;
             // Use the same back-and-forth Z with additional phase offset (de-phased vs purple)
             const zOscCyan = this.RING_AUTO_ROT_Z_ENABLED ? (zAmp * Math.sin(2 * Math.PI * zFreq * t + (this.RING_AUTO_ROT_Z_PHASE || 0))) : 0;
             const zAnimCyan = zBase + zOscCyan;
-            this.ring3DCyan.rotation.z = baseC + animRot + this.RING_CYAN_ROT_Z_OFFSET + this.RING_INDIVIDUAL_ROT_OFFSET + lfoRot + individualRot + rockZ + zAnimCyan;
+            this.ring3DCyan.rotation.z = baseC + this.RING_CYAN_ROT_Z_OFFSET + this.RING_INDIVIDUAL_ROT_OFFSET + zAnimCyan;
             this.ring3DCyan.position.y = animBob * 0.5;
           }
         } catch (e) {
@@ -599,6 +585,19 @@ class DrawGame {
       <span id="rt-y-val" style="min-width:46px; text-align:right; display:inline-block;">${this.RING_Y_OFFSET}px</span>
     `;
     panel.appendChild(yRow);
+    // Add Z auto-rotation controls (amplitude + toggle)
+    const zAutoRow = document.createElement('div');
+    zAutoRow.style.cssText = 'display:flex; align-items:center; gap:10px; margin-top:8px;';
+    zAutoRow.innerHTML = `
+      <label style="white-space:nowrap; display:flex; align-items:center; gap:6px;">
+        <input id="rt-zauto-on" type="checkbox" ${this.RING_AUTO_ROT_Z_ENABLED ? 'checked' : ''} /> Z Auto
+      </label>
+      <label style="white-space:nowrap;">Z Auto Amp (°)
+        <input id="rt-zauto-amp" type="range" min="0" max="30" step="0.5" value="${(this.RING_AUTO_ROT_Z_AMP_DEG||7)}" style="vertical-align:middle; width:160px; margin-left:6px;">
+      </label>
+      <span id="rt-zauto-amp-val" style="min-width:46px; text-align:right; display:inline-block;">${(this.RING_AUTO_ROT_Z_AMP_DEG||7)}°</span>
+    `;
+    panel.appendChild(zAutoRow);
   document.body.appendChild(panel);
   this.ringsTunerPanel = panel;
 
@@ -702,7 +701,13 @@ class DrawGame {
     const cyanSpeedVal = panel.querySelector('#rt-cyan-speed-val');
     // Cross-link to legacy Y offset controls for sync
     const yMirror = panel.querySelector('#rt-y');
-    const yMirrorVal = panel.querySelector('#rt-y-val');    const refreshVals = () => {
+    const yMirrorVal = panel.querySelector('#rt-y-val');
+    // Z auto controls
+    const zAutoOn = panel.querySelector('#rt-zauto-on');
+    const zAutoAmp = panel.querySelector('#rt-zauto-amp');
+    const zAutoAmpVal = panel.querySelector('#rt-zauto-amp-val');
+
+    const refreshVals = () => {
       scaleVal.textContent = `${Math.round(this.RING_SCALE_MULT*100)}%`;
       rotxVal.textContent = `${Math.round(this.RING_ROT_X_RAD*180/Math.PI)}°`;
       rotyVal.textContent = `${Math.round(this.RING_ROT_Y_RAD*180/Math.PI)}°`;
@@ -717,6 +722,7 @@ class DrawGame {
       lfoPhaseVal.textContent = `${Math.round(this.RING_LFO_PHASE_OFFSET*180/Math.PI)}°`;
       purpleSpeedVal.textContent = `${this.RING_PURPLE_ROTATION_SPEED.toFixed(1)}x`;
       cyanSpeedVal.textContent = `${this.RING_CYAN_ROTATION_SPEED.toFixed(1)}x`;
+      if (zAutoAmpVal) zAutoAmpVal.textContent = `${(this.RING_AUTO_ROT_Z_AMP_DEG||0).toFixed(1)}°`;
     };
 
     const forceUpdate = () => { try { this.update3DRingsPosition(); } catch(e) {} };
@@ -745,6 +751,19 @@ class DrawGame {
       refreshVals();
       forceUpdate();
     });
+
+    if (zAutoOn) {
+      zAutoOn.addEventListener('change', (e) => {
+        this.RING_AUTO_ROT_Z_ENABLED = !!e.target.checked;
+        refreshVals();
+      });
+    }
+    if (zAutoAmp) {
+      zAutoAmp.addEventListener('input', (e) => {
+        this.RING_AUTO_ROT_Z_AMP_DEG = parseFloat(e.target.value) || 0;
+        refreshVals();
+      });
+    }
 
     up.addEventListener('input', (e) => {
       this.RING_UP_OFFSET_FACTOR = Math.max(0, parseInt(e.target.value, 10) / 100);
