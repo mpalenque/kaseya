@@ -23,6 +23,8 @@ class SphereGame {
     this.renderRAF = 0;
   this.transition = { active: false, mode: null, start: 0, duration: 600, from: { opacity: 1, z: 0 }, to: { opacity: 1, z: 0 } };
   this.currentOpacity = 1;
+    // WebGL context state
+    this.glLost = false;
     
     // Container element
     this.sphereContainer = null;
@@ -82,6 +84,17 @@ class SphereGame {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.sortObjects = true;
     this.sphereContainer.appendChild(this.renderer.domElement);
+    // Handle WebGL context loss/restoration (can happen after MediaRecorder/preview)
+    this.renderer.domElement.addEventListener('webglcontextlost', (e) => {
+      e.preventDefault();
+      this.glLost = true;
+      console.warn('[SphereGame] WebGL context lost');
+    });
+    this.renderer.domElement.addEventListener('webglcontextrestored', () => {
+      this.glLost = false;
+      console.warn('[SphereGame] WebGL context restored');
+      try { this.onContextRestored(); } catch (e) { console.warn('onContextRestored failed', e); }
+    }, { once: false });
     
     Object.assign(this.renderer.domElement.style, { 
       position: 'fixed', 
@@ -120,6 +133,76 @@ class SphereGame {
     this.setupResize();
   }
 
+  // Ensure renderer is healthy; if context is lost, try to recreate renderer
+  ensureRendererReady() {
+    if (!this.renderer) return;
+    try {
+      const gl = this.renderer.getContext && this.renderer.getContext();
+      const lost = this.glLost || (gl && typeof gl.isContextLost === 'function' && gl.isContextLost());
+      if (lost) {
+        this.recreateRenderer();
+      }
+    } catch (_) {
+      // If getContext fails, try to recreate renderer
+      this.recreateRenderer();
+    }
+  }
+
+  recreateRenderer() {
+    if (typeof THREE === 'undefined') return;
+    try {
+      // Dispose old renderer and canvas
+      if (this.renderer) {
+        try { this.renderer.dispose(); } catch(_) {}
+        if (this.renderer.domElement && this.renderer.domElement.parentNode) {
+          this.renderer.domElement.parentNode.removeChild(this.renderer.domElement);
+        }
+      }
+      // Create new renderer
+      const r = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      r.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      r.setSize(window.innerWidth, window.innerHeight);
+      r.setClearColor(0x000000, 0);
+      r.outputColorSpace = THREE.SRGBColorSpace;
+      r.sortObjects = true;
+      this.renderer = r;
+      if (this.sphereContainer) this.sphereContainer.appendChild(this.renderer.domElement);
+      // Re-bind context loss handlers
+      this.renderer.domElement.addEventListener('webglcontextlost', (e) => { e.preventDefault(); this.glLost = true; console.warn('[SphereGame] WebGL context lost'); });
+      this.renderer.domElement.addEventListener('webglcontextrestored', () => { this.glLost = false; console.warn('[SphereGame] WebGL context restored'); try { this.onContextRestored(); } catch(e){} });
+      // Reconnect to face tracker for occlusion
+      if (this.faceTracker) {
+        try { this.faceTracker.setThreeComponents(this.scene, this.camera, this.renderer); } catch(_) {}
+      }
+    } catch (e) {
+      console.warn('Failed to recreate WebGLRenderer:', e);
+    }
+  }
+
+  onContextRestored() {
+    // Re-apply sizing and reconnect occluder
+    try {
+      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      this.renderer.setSize(window.innerWidth, window.innerHeight);
+    } catch(_) {}
+    if (this.faceTracker) {
+      try { this.faceTracker.setThreeComponents(this.scene, this.camera, this.renderer); } catch(_) {}
+    }
+    // Ensure spheres exist and are visible
+    if (!this.followers || this.followers.length === 0) {
+      this.createSpheres();
+    } else if (this.spheresGroup) {
+      for (const s of this.followers) {
+        if (!s.parent) this.spheresGroup.add(s);
+      }
+    }
+    if (this.isActive) {
+      if (this.sphereContainer) this.sphereContainer.style.display = 'block';
+      if (this.spheresGroup) this.spheresGroup.visible = true;
+      this.startAnimation();
+    }
+  }
+
   setupResize() {
     const onResize = () => {
       this.camera.aspect = window.innerWidth / window.innerHeight;
@@ -135,6 +218,8 @@ class SphereGame {
     this.isActive = true;
     document.body.classList.add('sphere-mode');
     this.sphereContainer.style.display = 'block';
+    // Make sure renderer is ready (recover if WebGL context was lost)
+    this.ensureRendererReady();
     
     // Ensure face tracker is properly reinitialized
     if (this.faceTracker) {
@@ -218,6 +303,7 @@ class SphereGame {
   // Resume spheres with an enter animation when coming back from draw mode
   resumeFromDrawMode() {
     if (!this.scene || !this.renderer) return;
+    this.ensureRendererReady();
     // Ensure container is visible
     if (this.sphereContainer) this.sphereContainer.style.display = 'block';
     // If somehow cleared, recreate spheres
@@ -233,6 +319,32 @@ class SphereGame {
     // Kick animation and transition
     this.startAnimation();
     this.startEnterTransition();
+  }
+
+  // Force spheres to be visible and animation running (used when returning from preview/cancel)
+  ensureVisibleAndRunning() {
+    try {
+      this.ensureRendererReady();
+      if (this.sphereContainer) this.sphereContainer.style.display = 'block';
+      if (!this.isActive) {
+        // If previously deactivated, fully activate
+        this.activate();
+        return;
+      }
+      if (!this.spheresGroup) {
+        this.spheresGroup = new THREE.Group();
+        this.spheresGroup.name = 'spheres-root';
+        this.scene.add(this.spheresGroup);
+      }
+      if (!this.followers || this.followers.length === 0) {
+        this.createSpheres();
+      }
+      if (this.spheresGroup) this.spheresGroup.visible = true;
+      // Kick animation if stopped
+      if (!this.renderRAF) this.startAnimation();
+    } catch (e) {
+      console.warn('ensureVisibleAndRunning failed:', e);
+    }
   }
 
   createSpheres() {
