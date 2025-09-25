@@ -48,6 +48,14 @@ class DrawGame {
   this.RING_ROCK_Z_AMP = 3 * Math.PI / 180;              // 3 degrees
   this.RING_ROCK_Z_FREQ_PURPLE = 0.35;                   // Hz
   this.RING_ROCK_Z_FREQ_CYAN = 0.47;                     // Hz (slightly different)
+  // Auto-animate the same Z rotation you tweak in the tuner
+  this.RING_AUTO_ROT_Z_ENABLED = true;                   // enable continuous Z rotation
+  // Oscillation (back-and-forth) in Z around base value
+  this.RING_AUTO_ROT_Z_AMP_DEG = 7;                      // amplitude: 7 degrees
+  this.RING_AUTO_ROT_Z_FREQ = 0.35;                      // Hz (speed of oscillation)
+  this.RING_AUTO_ROT_Z_PHASE = Math.PI / 3;              // cyan phase offset vs purple
+  // Keep a base (slider) value separate; we'll animate RING_ROT_Z_RAD from this base
+  this.RING_ROT_Z_BASE_RAD = this.RING_ROT_Z_RAD;
     
     // Ring animation
     this.ringAnimRAF = 0;
@@ -189,7 +197,8 @@ class DrawGame {
     this.ring3DGroup = new THREE.Group();
     this.ring3DGroup.name = 'draw-game-rings';
 
-    const torusGeo = new THREE.TorusGeometry(1.0, 0.05, 32, 120);
+  // Make ring thinner (further reduced thickness) without changing overall size
+  const torusGeo = new THREE.TorusGeometry(1.0, 0.05 * 0.55, 32, 120);
 
     const matP = new THREE.MeshStandardMaterial({ color: 0xAA3BFF, emissive: 0x5511AA, roughness: 0.4, metalness: 0.2 });
     const matC = new THREE.MeshStandardMaterial({ color: 0x00F0FF, emissive: 0x003344, roughness: 0.35, metalness: 0.1 });
@@ -400,6 +409,10 @@ class DrawGame {
       if (this.ring3DGroup && window.THREE) {
         try {
           const THREE = window.THREE;
+          // Animate Z with back-and-forth (sinusoidal) around base value
+          const zAmp = (this.RING_AUTO_ROT_Z_AMP_DEG || 7) * Math.PI / 180; // 7° default
+          const zFreq = (this.RING_AUTO_ROT_Z_FREQ || 0.35); // Hz
+          const zBase = (this.RING_ROT_Z_BASE_RAD || 0);
           // Purple
           if (this.ring3DPurple) {
             const baseP = (this.RING_ANGLE_BASE + (this.RING_ANGLE_DELTA / 2)) * (Math.PI / 180);
@@ -411,7 +424,10 @@ class DrawGame {
             const individualRot = this.RING_PURPLE_ROTATION_SPEED * 2 * Math.PI * t;
             // Add gentle, independent Z rocking
             const rockZ = Math.sin(2 * Math.PI * this.RING_ROCK_Z_FREQ_PURPLE * t) * this.RING_ROCK_Z_AMP;
-            this.ring3DPurple.rotation.z = baseP + animRot + lfoRot + individualRot + rockZ;
+            // Apply animated Z parameter directly (back-and-forth)
+            const zOscPurple = this.RING_AUTO_ROT_Z_ENABLED ? (zAmp * Math.sin(2 * Math.PI * zFreq * t)) : 0;
+            const zAnimPurple = zBase + zOscPurple;
+            this.ring3DPurple.rotation.z = baseP + animRot + lfoRot + individualRot + rockZ + zAnimPurple;
             this.ring3DPurple.position.y = animBob * 0.5;
           }
 
@@ -426,7 +442,10 @@ class DrawGame {
             const individualRot = this.RING_CYAN_ROTATION_SPEED * 2 * Math.PI * t;
             // Add gentle, independent Z rocking (different frequency for de-phasing)
             const rockZ = Math.sin(2 * Math.PI * this.RING_ROCK_Z_FREQ_CYAN * t + 0.37) * this.RING_ROCK_Z_AMP;
-            this.ring3DCyan.rotation.z = baseC + animRot + this.RING_CYAN_ROT_Z_OFFSET + this.RING_INDIVIDUAL_ROT_OFFSET + lfoRot + individualRot + rockZ;
+            // Use the same back-and-forth Z with additional phase offset (de-phased vs purple)
+            const zOscCyan = this.RING_AUTO_ROT_Z_ENABLED ? (zAmp * Math.sin(2 * Math.PI * zFreq * t + (this.RING_AUTO_ROT_Z_PHASE || 0))) : 0;
+            const zAnimCyan = zBase + zOscCyan;
+            this.ring3DCyan.rotation.z = baseC + animRot + this.RING_CYAN_ROT_Z_OFFSET + this.RING_INDIVIDUAL_ROT_OFFSET + lfoRot + individualRot + rockZ + zAnimCyan;
             this.ring3DCyan.position.y = animBob * 0.5;
           }
         } catch (e) {
@@ -722,6 +741,7 @@ class DrawGame {
     rotz.addEventListener('input', (e) => {
       const deg = parseInt(e.target.value, 10) || 0;
       this.RING_ROT_Z_RAD = deg * Math.PI / 180;
+      this.RING_ROT_Z_BASE_RAD = this.RING_ROT_Z_RAD; // keep base in sync with slider
       refreshVals();
       forceUpdate();
     });
