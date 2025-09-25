@@ -33,7 +33,7 @@ class DrawGame {
   this.RING_ROT_Y_RAD = 0.0;                  // Rot Y: 0°
   this.RING_ROT_Z_RAD = 0.0;                  // Rot Z: 0°
   this.RING_UP_OFFSET_FACTOR = 1.51;          // Base Height: 151%
-  this.RING_UP_EXTRA_PX = 275;                // Extra Height: 275px
+  this.RING_UP_EXTRA_PX = 380;                // Extra Height: 380px
   this.RING_LOCAL_Y_OFFSET_FACTOR = 0.0;     // extra vertical offset in units of face radius (applied along local Y)
   this.RING_BEHIND_OFFSET_FACTOR = 0.80;     // Depth: 80%
   this.RING_Z_SEPARATION = 0.35;             // Z Separation: 35% (more separation)
@@ -250,10 +250,10 @@ class DrawGame {
     const pixelToWorldScale = radius * 0.5; // MUCH stronger scaling for dramatic offset control
     upOffset += (this.RING_UP_EXTRA_PX || 0) * pixelToWorldScale;
     
-    // iPhone-specific correction: rings appear 15% too high, adjust downward
-    const isIPhone = /iPhone/i.test(navigator.userAgent);
-    if (isIPhone) {
-      upOffset -= radius * 0.15; // Move rings down 15% of face radius on iPhone
+    // Mobile-specific correction: rings appear too high, adjust downward
+    const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent) || window.innerWidth < 768;
+    if (isMobile) {
+      upOffset -= radius * 0.25; // Stronger downward adjustment for mobile devices
     }
 
     // Position rings based on face tracking

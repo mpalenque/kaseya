@@ -136,6 +136,15 @@ class SphereGame {
     document.body.classList.add('sphere-mode');
     this.sphereContainer.style.display = 'block';
     
+    // Ensure face tracker is properly reinitialized
+    if (this.faceTracker) {
+      this.faceTracker.setThreeComponents(this.scene, this.camera, this.renderer);
+      // Force occlusion refresh
+      if (this.faceTracker.setOccluderEnabled) {
+        this.faceTracker.setOccluderEnabled(true);
+      }
+    }
+    
     // Wait for THREE.js and scene to be ready
     if (this.scene && this.renderer && this.clock) {
       this.currentOpacity = 0;
@@ -272,7 +281,14 @@ class SphereGame {
       }
       if (!position.success) continue;
 
-      const { x, y, z } = position;
+      let { x, y, z } = position;
+      
+      // iPhone/mobile-specific position correction: spheres appear too high
+      const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent) || window.innerWidth < 768;
+      if (isMobile) {
+        y -= 0.6; // Stronger downward adjustment for mobile devices
+      }
+      
       this.sphereColliders.push({ x, y, z, radius });
       
       // Create sphere geometry and material
@@ -291,13 +307,6 @@ class SphereGame {
       });
       
       const mesh = new THREE.Mesh(geometry, material);
-      
-      // iPhone-specific position correction: spheres appear too high
-      const isIPhone = /iPhone/i.test(navigator.userAgent);
-      if (isIPhone) {
-        y -= 0.5; // Move spheres down on iPhone
-      }
-      
       mesh.position.set(x, y, z);
       
       // Orbital behavior data

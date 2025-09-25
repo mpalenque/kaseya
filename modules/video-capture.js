@@ -206,12 +206,8 @@ class VideoCapture {
       // Draw the 3D sphere renderer output onto the recording canvas
       const sphereCanvas = this.sphereGame.renderer.domElement;
       if (sphereCanvas) {
-        ctx.save();
-        // Mirror to match webcam mirroring so composite looks consistent
-        ctx.translate(canvasWidth, 0);
-        ctx.scale(-1, 1);
+        // Draw 3D content without mirroring to match real-time orientation
         ctx.drawImage(sphereCanvas, 0, 0, canvasWidth, canvasHeight);
-        ctx.restore();
       }
     }
     
@@ -226,12 +222,8 @@ class VideoCapture {
           const off = this.faceTracker.renderer.domElement;
           if (off) {
             this.faceTracker.renderer.render(this.faceTracker.scene, this.faceTracker.camera);
-            ctx.save();
-            // Mirror to match webcam mirroring so composite looks consistent
-            ctx.translate(canvasWidth, 0);
-            ctx.scale(-1, 1);
+            // Draw 3D content without mirroring to match real-time orientation
             ctx.drawImage(off, 0, 0, canvasWidth, canvasHeight);
-            ctx.restore();
           }
         } catch (e) {
           // If 3D render fails, skip drawing rings to avoid old 2D artifacts

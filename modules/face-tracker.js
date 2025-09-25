@@ -322,10 +322,10 @@ class FaceTracker {
     let xFinal = xNorm * 2 - 1;
     let yFinal = (1 - yNorm) * 2 - 1;
     
-    // iPhone-specific Y offset correction for better occlusion alignment
-    const isIPhone = /iPhone/i.test(navigator.userAgent);
-    if (isIPhone) {
-      yFinal += 0.25; // Stronger adjustment Y position downward for iPhone (positive moves down in NDC)
+    // Mobile-specific Y offset correction for better occlusion alignment
+    const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent) || window.innerWidth < 768;
+    if (isMobile) {
+      yFinal -= 0.2; // Move occlusion DOWN on mobile (negative moves up in NDC, so this moves down)
     }
     
     return { x: xFinal, y: yFinal };
