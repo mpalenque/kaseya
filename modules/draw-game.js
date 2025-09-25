@@ -439,6 +439,14 @@ class DrawGame {
         }
       }
 
+      // Update debug info when tuner is visible
+      try {
+        const panel = this.ringsTunerPanel || document.getElementById('rings-tuner');
+        if (panel && (panel.style.display !== 'none') && getComputedStyle(panel).display !== 'none') {
+          this.updateRingsDebugInfo();
+        }
+      } catch(e) {}
+
       this.ringAnimRAF = requestAnimationFrame(step);
     };
 
@@ -598,6 +606,23 @@ class DrawGame {
       <span id="rt-zauto-amp-val" style="min-width:46px; text-align:right; display:inline-block;">${(this.RING_AUTO_ROT_Z_AMP_DEG||7)}°</span>
     `;
     panel.appendChild(zAutoRow);
+    // Debug info block
+    const dbgSep = document.createElement('hr');
+    dbgSep.style.cssText = 'border:none; border-top:1px solid rgba(255,255,255,0.2); margin:8px 0;';
+    panel.appendChild(dbgSep);
+    const dbg = document.createElement('div');
+    dbg.id = 'rt-debug';
+    dbg.style.cssText = 'font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; white-space: nowrap; max-width: 360px;';
+    dbg.innerHTML = `
+      <div style="opacity:0.85; margin-bottom:4px;">Debug</div>
+      <div style="display:flex; gap:6px;"><span style="opacity:0.7;">Purple scale:</span><span id="rt-dbg-ps">-</span></div>
+      <div style="display:flex; gap:6px;"><span style="opacity:0.7;">Cyan scale:</span><span id="rt-dbg-cs">-</span></div>
+      <div style="display:flex; gap:6px;"><span style="opacity:0.7;">Group pos:</span><span id="rt-dbg-gpos">-</span></div>
+      <div style="display:flex; gap:6px;"><span style="opacity:0.7;">Face center:</span><span id="rt-dbg-fc">-</span></div>
+      <div style="display:flex; gap:6px;"><span style="opacity:0.7;">Face radius:</span><span id="rt-dbg-fr">-</span></div>
+      <div style="display:flex; gap:6px;"><span style="opacity:0.7;">Head Euler (deg XYZ):</span><span id="rt-dbg-he">-</span></div>
+    `;
+    panel.appendChild(dbg);
   document.body.appendChild(panel);
   this.ringsTunerPanel = panel;
 
@@ -606,12 +631,64 @@ class DrawGame {
     this.setup3DTunerEventListeners(panel);
   }
 
+  updateRingsDebugInfo() {
+    try {
+      const panel = this.ringsTunerPanel || document.getElementById('rings-tuner');
+      if (!panel) return;
+      const ps = panel.querySelector('#rt-dbg-ps');
+      const cs = panel.querySelector('#rt-dbg-cs');
+      const gpos = panel.querySelector('#rt-dbg-gpos');
+      const fc = panel.querySelector('#rt-dbg-fc');
+      const fr = panel.querySelector('#rt-dbg-fr');
+      const he = panel.querySelector('#rt-dbg-he');
+
+      const fmt = (n) => (Number.isFinite(n) ? n.toFixed(3) : '-');
+      const fmtDeg = (r) => (Number.isFinite(r) ? (r * 180 / Math.PI).toFixed(1) : '-');
+
+      // Ring scales
+      if (this.ring3DPurple && ps) {
+        ps.textContent = `${fmt(this.ring3DPurple.scale.x)} ${fmt(this.ring3DPurple.scale.y)} ${fmt(this.ring3DPurple.scale.z)}`;
+      }
+      if (this.ring3DCyan && cs) {
+        cs.textContent = `${fmt(this.ring3DCyan.scale.x)} ${fmt(this.ring3DCyan.scale.y)} ${fmt(this.ring3DCyan.scale.z)}`;
+      }
+
+      // Group position
+      if (this.ring3DGroup && gpos) {
+        const p = this.ring3DGroup.position;
+        gpos.textContent = `x:${fmt(p.x)} y:${fmt(p.y)} z:${fmt(p.z)}`;
+      }
+
+      // Face center & radius
+      if (this.faceTracker && (fc || fr)) {
+        const THREE = window.THREE;
+        const center = this.faceTracker.faceColliderCenter ? this.faceTracker.faceColliderCenter.clone() : (this.faceTracker.getHeadPosition ? this.faceTracker.getHeadPosition().world : (THREE ? new THREE.Vector3(0,0,3) : {x:0,y:0,z:3}));
+        const radius = this.faceTracker.faceColliderRadius || (this.faceTracker.getHeadPosition ? this.faceTracker.getHeadPosition().colliderRadius : 0.8);
+        if (fc && center) {
+          fc.textContent = `x:${fmt(center.x)} y:${fmt(center.y)} z:${fmt(center.z)}`;
+        }
+        if (fr) {
+          fr.textContent = `${fmt(radius)}`;
+        }
+      }
+
+      // Head rotation (Euler from occluder root)
+      if (this.faceTracker && this.faceTracker.headOccluderRoot && he && window.THREE) {
+        const e = new THREE.Euler().setFromQuaternion(this.faceTracker.headOccluderRoot.quaternion, 'XYZ');
+        he.textContent = `${fmtDeg(e.x)} ${fmtDeg(e.y)} ${fmtDeg(e.z)}`;
+      }
+    } catch (e) {}
+  }
+
   toggleRingsTuner(forceState) {
     const panel = this.ringsTunerPanel || document.getElementById('rings-tuner');
     if (!panel) return;
     const isHidden = panel.style.display === 'none' || getComputedStyle(panel).display === 'none';
     const show = typeof forceState === 'boolean' ? forceState : isHidden;
     panel.style.display = show ? 'block' : 'none';
+    if (show) {
+      try { this.updateRingsDebugInfo(); } catch(e) {}
+    }
   }
 
   setupTunerEventListeners(panel) {

@@ -3,6 +3,8 @@ class SphereGame {
   constructor() {
     this.isActive = false;
     this.faceTracker = null;
+    // Simple mobile detection to adapt motion tuning
+    this.isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent) || window.innerWidth < 768;
     
     // 3D Scene setup
     this.renderer = null;
@@ -13,10 +15,15 @@ class SphereGame {
     // Sphere system
     this.followerCount = 120; // Reduced for better performance
     this.followers = [];
-    this.sphereColliders = [];
-    this.faceExclusionRadius = 1.2;
-    this.minGap = 0.05;
-    this.facePlaneMargin = 0.08;
+  this.sphereColliders = [];
+  // Increase initial exclusion so spheres don't spawn too close to the face
+  this.faceExclusionRadius = 1.35;
+  this.minGap = 0.05;
+  // Keep spheres slightly further in front of the face plane
+  this.facePlaneMargin = 0.12;
+  // Extra safety margin so spheres never intersect the occluder volume
+  this.faceOccluderInflate = 1.12; // inflate collider radius by 12%
+  this.faceColliderExtraMargin = 0.06; // absolute extra margin (world units)
     this.tmp = null;
     
     // Animation
@@ -407,7 +414,8 @@ class SphereGame {
       const geometry = new THREE.SphereGeometry(radius, 24, 24);
       const colorHex = DOT_COLORS[Math.floor(Math.random() * DOT_COLORS.length)];
       const color = new THREE.Color(colorHex);
-      const emissiveColor = new THREE.Color(colorHex).multiplyScalar(0.4);
+  // Increase emissive intensity by ~20%
+  const emissiveColor = new THREE.Color(colorHex).multiplyScalar(0.48);
       
       const material = new THREE.MeshStandardMaterial({ 
         color, 
@@ -590,14 +598,14 @@ class SphereGame {
       const dyh = this.tmp.y - faceColliderCenter.y; 
       const dzh = this.tmp.z - faceColliderCenter.z; 
       const distHeadSq = dxh*dxh + dyh*dyh + dzh*dzh; 
-      const minHeadDist = faceColliderRadius + sphere.userData.radius + faceColliderMargin;
+  const minHeadDist = (faceColliderRadius * this.faceOccluderInflate) + sphere.userData.radius + faceColliderMargin + this.faceColliderExtraMargin;
       
       if (distHeadSq > 0.0001) { 
         const distHead = Math.sqrt(distHeadSq); 
         if (distHead < minHeadDist) { 
           const overlap = minHeadDist - distHead;
           const pushStrength = Math.min(overlap / minHeadDist, 1.0); // Normalize push strength
-          const smoothFactor = 0.3; // Gentle push factor
+          const smoothFactor = 0.55; // Stronger push to stay outside occluder
           const scale = pushStrength * smoothFactor / distHead;
           this.tmp.x += dxh * scale; 
           this.tmp.y += dyh * scale; 
@@ -611,10 +619,18 @@ class SphereGame {
         this.tmp.z = headPosSmoothed.z + this.facePlaneMargin; 
       }
       
-      sphere.position.lerp(this.tmp, orbit.followLerp);
+      // Make following speed time-based and slightly faster on mobile
+      let alpha = orbit.followLerp;
+      // Convert per-frame alpha to time-scaled alpha targeting ~60 FPS behavior
+      const frames = Math.max(1, dt / (1/60));
+      alpha = 1 - Math.pow(1 - alpha, frames);
+      if (this.isMobile) {
+        alpha = Math.min(0.25, alpha * 1.15); // small boost on mobile
+      }
+      sphere.position.lerp(this.tmp, alpha);
     }
 
-    // Inter-sphere collision resolution - improved for smooth movement
+  // Inter-sphere collision resolution - improved for smooth movement
     for (let iter = 0; iter < 5; iter++) { // More iterations for smoother resolution
       for (let i = 0; i < this.followers.length; i++) {
         const sphereA = this.followers[i]; 
@@ -667,6 +683,32 @@ class SphereGame {
           }
         }
       }
+    }
+
+    // Final enforcement: ensure spheres are outside the face occluder radius with added margin
+    const faceZ = headPosSmoothed.z + this.facePlaneMargin;
+    for (const sphere of this.followers) {
+      const dx = sphere.position.x - faceColliderCenter.x;
+      const dy = sphere.position.y - faceColliderCenter.y;
+      const dz = sphere.position.z - faceColliderCenter.z;
+      let dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+      const minDist = (faceColliderRadius * this.faceOccluderInflate) + sphere.userData.radius + faceColliderMargin + this.faceColliderExtraMargin;
+      if (dist < minDist) {
+        // If very close to center, pick a fallback direction
+        let nx, ny, nz;
+        if (dist > 1e-4) { nx = dx / dist; ny = dy / dist; nz = dz / dist; }
+        else { nx = 0; ny = 1; nz = 0; dist = 1; }
+        const targetX = faceColliderCenter.x + nx * minDist;
+        const targetY = faceColliderCenter.y + ny * minDist;
+        const targetZ = faceColliderCenter.z + nz * minDist;
+        // Snap a bit towards the safe position (not full snap to avoid popping)
+        const k = 0.85;
+        sphere.position.x = sphere.position.x + (targetX - sphere.position.x) * k;
+        sphere.position.y = sphere.position.y + (targetY - sphere.position.y) * k;
+        sphere.position.z = sphere.position.z + (targetZ - sphere.position.z) * k;
+      }
+      // Keep in front of face plane
+      if (sphere.position.z > faceZ) sphere.position.z = faceZ;
     }
   }
 
