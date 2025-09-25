@@ -427,6 +427,11 @@ class VideoCapture {
       cancelAnimationFrame(this.recordRAF);
       this.recordRAF = 0;
     }
+    
+    // Restore sphere visibility that was hidden during draw mode recording
+    if (this.sphereGame && this.sphereGame.spheresGroup) {
+      this.sphereGame.spheresGroup.visible = true;
+    }
   }
 
   onRecordingStop() {
@@ -519,6 +524,11 @@ class VideoCapture {
     this.previewVideo.src = '';
     this.previewImage.src = '';
     this.currentFile = null;
+    
+    // Restore sphere visibility that was hidden during draw mode recording
+    if (this.sphereGame && this.sphereGame.spheresGroup) {
+      this.sphereGame.spheresGroup.visible = true;
+    }
   }
 
   async shareOrDownload(forceDownload = false) {

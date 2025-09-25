@@ -264,6 +264,15 @@ class UIManager {
     if (this.videoCapture) {
       this.videoCapture.hidePreview();
     }
+    
+    // Ensure current mode is properly restored after hiding preview
+    // This fixes the issue where spheres don't appear after canceling video recording
+    if (this.currentMode) {
+      const currentMode = this.currentMode;
+      // Force reactivation by briefly clearing and resetting the mode
+      this.currentMode = null;
+      this.selectFilterMode(currentMode);
+    }
   }
 
   shareCurrentFile() {
