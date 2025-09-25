@@ -178,8 +178,10 @@ class UIManager {
     this.pressTimer = setTimeout(() => {
       this.pressTimer = null;
       
-      // Start recording
+  // Start recording
       this.recorderContainer.classList.add('recording');
+  // Ensure we are in draw mode to use the single renderer path for rings
+  try { this.selectFilterMode('draw'); } catch(_) {}
       this.videoCapture.beginVideoRecording();
       
       // Start word roulette if in draw mode

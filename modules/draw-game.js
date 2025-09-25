@@ -167,12 +167,15 @@ class DrawGame {
     }
 
     // Apply smooth interpolation
-    const dx = targetX - this.smoothWordX;
-    const dy = targetY - this.smoothWordY;
-    const dist = Math.hypot(dx, dy);
-    const factor = Math.min(0.45, this.WORD_SMOOTHING_FACTOR + (dist / 500) * 0.15);
-    this.smoothWordX += dx * factor;
-    this.smoothWordY += dy * factor;
+  const dx = targetX - this.smoothWordX;
+  const dy = targetY - this.smoothWordY;
+  const dist = Math.hypot(dx, dy);
+  // Slightly reduce max snap and add ease-out to avoid micro jitter when text updates
+  let factor = Math.min(0.35, this.WORD_SMOOTHING_FACTOR + (dist / 500) * 0.12);
+  // Small deadzone to ignore sub-pixel noise
+  if (Math.abs(dx) < 0.25 && Math.abs(dy) < 0.25) factor *= 0.5;
+  this.smoothWordX += dx * factor;
+  this.smoothWordY += dy * factor;
 
     // Update element position with smoothed values
     this.permanentWordElement.style.left = `${this.smoothWordX}px`;

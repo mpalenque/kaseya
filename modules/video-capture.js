@@ -218,15 +218,14 @@ class VideoCapture {
       }
       if (this.faceTracker && this.faceTracker.renderer && this.faceTracker.scene && this.faceTracker.camera) {
         try {
-          // Render 3D scene to an offscreen canvas and draw into composite
+          // Draw the last rendered frame from the existing renderer canvas
           const off = this.faceTracker.renderer.domElement;
           if (off) {
-            this.faceTracker.renderer.render(this.faceTracker.scene, this.faceTracker.camera);
             // Draw 3D content without mirroring to match real-time orientation
             ctx.drawImage(off, 0, 0, canvasWidth, canvasHeight);
           }
         } catch (e) {
-          // If 3D render fails, skip drawing rings to avoid old 2D artifacts
+          // If 3D draw fails, skip drawing rings to avoid old 2D artifacts
         }
       } else {
         // If 3D renderer not available, do not draw old 2D rings
