@@ -16,22 +16,24 @@ class UIManager {
     // Dependencies
     this.videoCapture = null;
     this.drawGame = null;
-    this.colorCircles = null;
+    this.sphereGame = null;
     this.faceTracker = null;
   }
 
   init(dependencies) {
-    const { videoCapture, drawGame, colorCircles, faceTracker } = dependencies;
+    const { videoCapture, drawGame, sphereGame, faceTracker } = dependencies;
     this.videoCapture = videoCapture;
     this.drawGame = drawGame;
-    this.colorCircles = colorCircles;
+    this.sphereGame = sphereGame;
     this.faceTracker = faceTracker;
     
     this.initDOMElements();
     this.setupEventListeners();
     
-    // Set initial mode
-    this.selectFilterMode('circles');
+    // Set initial mode with delay to allow THREE.js to load
+    setTimeout(() => {
+      this.selectFilterMode('spheres');
+    }, 200);
   }
 
   initDOMElements() {
@@ -70,14 +72,14 @@ class UIManager {
   }
 
   selectFilterMode(mode) {
-    if (!['none','draw','circles'].includes(mode)) return;
+    if (!['none','draw','spheres'].includes(mode)) return;
     if (this.currentMode === mode) return;
     
     this.currentMode = mode;
     
     // Update UI buttons
     const wrappers = Array.from(document.querySelectorAll('#filters-bar .filter-wrapper'));
-    const order = ['none','circles','draw'];
+    const order = ['none','spheres','draw'];
     
     // Clear active states
     wrappers.forEach(w => w.classList.remove('active'));
@@ -106,6 +108,12 @@ class UIManager {
     
     // Update modules based on mode
     this.updateModesForCurrentFilter(mode);
+
+    // Toggle body class for sphere/draw modes to control CSS-driven visibility
+    try {
+      document.body.classList.toggle('sphere-mode', mode === 'spheres');
+      document.body.classList.toggle('draw-mode', mode === 'draw');
+    } catch (e) {}
   }
 
   updateModesForCurrentFilter(mode) {
@@ -116,13 +124,48 @@ class UIManager {
       this.drawGame.updateWordPositionForMode(mode === 'draw');
     }
     
-    // Handle particles mode
-    if (mode === 'circles') {
-      if (this.colorCircles && !this.colorCircles.isActive) {
-        this.colorCircles.activate();
+    // Handle sphere mode
+    if (mode === 'spheres') {
+      if (!this.sphereGame) return;
+      if (!this.sphereGame.isActive) {
+        // First time or after full deactivate
+        this.sphereGame.activate();
+      } else {
+        // Coming back from draw mode: resume nicely
+        if (this.sphereGame.resumeFromDrawMode) {
+          this.sphereGame.resumeFromDrawMode();
+        } else {
+          if (this.sphereGame.spheresGroup) this.sphereGame.spheresGroup.visible = true;
+          this.sphereGame.startAnimation && this.sphereGame.startAnimation();
+        }
       }
-    } else if (this.colorCircles && this.colorCircles.isActive) {
-      this.colorCircles.deactivate();
+    } else if (this.sphereGame && this.sphereGame.isActive) {
+      // When leaving spheres for draw, just pause to keep resources/warm state
+      if (mode === 'draw' && this.sphereGame.pauseForDrawMode) {
+        this.sphereGame.pauseForDrawMode();
+      } else {
+        // Smoothly exit spheres then deactivate when going to 'none'
+        if (this.sphereGame.exitAndDeactivate) {
+          this.sphereGame.exitAndDeactivate();
+        } else {
+          this.sphereGame.deactivate();
+        }
+      }
+    }
+
+    // When in draw mode, keep the 3D renderer visible to render rings (but hide spheres)
+    if (mode === 'draw' && this.sphereGame) {
+      try {
+        if (this.sphereGame.sphereContainer) {
+          this.sphereGame.sphereContainer.style.display = 'block';
+        }
+        // Hide/stop handled by pauseForDrawMode above
+      } catch(e) {}
+    }
+
+    // Hide renderer when no filter selected
+    if (mode === 'none' && this.sphereGame && this.sphereGame.sphereContainer) {
+      this.sphereGame.sphereContainer.style.display = 'none';
     }
     
     // Stop spinning if not in draw mode
@@ -171,7 +214,13 @@ class UIManager {
       const recordingState = this.videoCapture.getRecordingState();
       if (recordingState.isRecording) {
         this.recorderContainer.classList.remove('recording');
-        this.videoCapture.scheduleDelayedStop();
+        // In spheres mode, stop immediately on release; in draw mode keep delayed tail
+        if (this.currentMode === 'spheres') {
+          this.videoCapture.tailStopScheduled = false;
+          this.videoCapture.stopVideoRecording();
+        } else {
+          this.videoCapture.scheduleDelayedStop();
+        }
       }
     }
   }

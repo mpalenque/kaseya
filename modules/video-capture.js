@@ -37,13 +37,15 @@ class VideoCapture {
     // Dependencies
     this.webcamEl = null;
     this.drawGame = null;
-    this.colorCircles = null;
+    this.sphereGame = null;
+    this.faceTracker = null;
   }
 
-  async init(webcamElement, drawGame, colorCircles) {
+  async init(webcamElement, drawGame, sphereGame, faceTracker) {
     this.webcamEl = webcamElement;
     this.drawGame = drawGame;
-    this.colorCircles = colorCircles;
+    this.sphereGame = sphereGame;
+    this.faceTracker = faceTracker;
     
     // Get DOM elements
     this.progressBar = document.querySelector('.progress-bar');
@@ -135,7 +137,12 @@ class VideoCapture {
       } else {
         // Normal dynamic drawing
         if (this.webcamEl.videoWidth) {
+          // Mirror horizontally to match live selfie view
+          ctx.save();
+          ctx.translate(composed.width, 0);
+          ctx.scale(-1, 1);
           this.drawWebcamCover(ctx, this.webcamEl, composed.width, composed.height);
+          ctx.restore();
         }
         await this.captureHTMLElements(ctx, composed.width, composed.height);
         
@@ -188,48 +195,54 @@ class VideoCapture {
   async captureHTMLElements(ctx, canvasWidth, canvasHeight) {
     const scaleX = canvasWidth / window.innerWidth;
     const scaleY = canvasHeight / window.innerHeight;
+    const inDrawMode = document.body.classList.contains('draw-mode');
+    const inSphereMode = document.body.classList.contains('sphere-mode');
     
     // Apply top gradient each frame to composite stream
     this.drawTopGradient(ctx, canvasWidth, canvasHeight);
     
-    // Draw particles if in particles mode
-    if (this.colorCircles && this.colorCircles.isActive && this.colorCircles.getParticles().length > 0) {
-      const particles = this.colorCircles.getParticles();
-      // Draw dot assets respecting depth (farther (more negative) first)
-      const ordered = [...particles].sort((a,b) => a.depth - b.depth);
-      for (const p of ordered) {
-        // Map logical position to canvas space
-        const centerX = p.x * scaleX;
-        const centerY = p.y * scaleY;
-        // Match DOM depth-based scale used in CSS transform
-        const depthNorm = (p.currentDepth + 600) / 600; // same normalization as animate()
-        const depthScale = 0.55 + (depthNorm * 0.75);
-        // Use uniform scale so circles stay perfectly round
-        const uniScale = Math.min(scaleX, scaleY);
-        const size = p.baseSize * depthScale * uniScale;
-        
+  // Draw spheres if in sphere mode - capture 3D renderer output
+  if (inSphereMode && this.sphereGame && this.sphereGame.renderer) {
+      // Draw the 3D sphere renderer output onto the recording canvas
+      const sphereCanvas = this.sphereGame.renderer.domElement;
+      if (sphereCanvas) {
         ctx.save();
-        // Match DOM opacity
-        const computed = window.getComputedStyle(p.element);
-        const alpha = parseFloat(computed.opacity || '1');
-        ctx.globalAlpha = isNaN(alpha) ? 1 : alpha;
-        // Use the actual background color from the DOM element
-        const color = p.element.style.background || p.element.style.backgroundColor || computed.backgroundColor || '#ffffff';
-        ctx.fillStyle = color;
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, size/2, 0, Math.PI*2);
-        ctx.fill();
+        // Mirror to match webcam mirroring so composite looks consistent
+        ctx.translate(canvasWidth, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(sphereCanvas, 0, 0, canvasWidth, canvasHeight);
         ctx.restore();
       }
     }
     
-    // Draw animated rings into the composite capture
-    if (this.drawGame) {
-      this.drawGame.drawRingsOnCanvas(ctx, canvasWidth, canvasHeight);
+    // Draw rings only in draw mode; render the THREE.js scene (no 2D fallback)
+    if (this.drawGame && inDrawMode) {
+      if (this.sphereGame && this.sphereGame.spheresGroup) {
+        this.sphereGame.spheresGroup.visible = false;
+      }
+      if (this.faceTracker && this.faceTracker.renderer && this.faceTracker.scene && this.faceTracker.camera) {
+        try {
+          // Render 3D scene to an offscreen canvas and draw into composite
+          const off = this.faceTracker.renderer.domElement;
+          if (off) {
+            this.faceTracker.renderer.render(this.faceTracker.scene, this.faceTracker.camera);
+            ctx.save();
+            // Mirror to match webcam mirroring so composite looks consistent
+            ctx.translate(canvasWidth, 0);
+            ctx.scale(-1, 1);
+            ctx.drawImage(off, 0, 0, canvasWidth, canvasHeight);
+            ctx.restore();
+          }
+        } catch (e) {
+          // If 3D render fails, skip drawing rings to avoid old 2D artifacts
+        }
+      } else {
+        // If 3D renderer not available, do not draw old 2D rings
+      }
     }
     
-    // Draw text (only if not in particles mode)
-    if (this.drawGame && (!this.colorCircles || !this.colorCircles.isActive) && this.drawGame.permanentWordElement && this.drawGame.permanentWordElement.style.opacity !== '0') {
+    // Draw text only in draw mode
+    if (inDrawMode && this.drawGame && this.drawGame.permanentWordElement && this.drawGame.permanentWordElement.style.opacity !== '0') {
       this.drawWordOnCanvas(ctx, canvasWidth, canvasHeight);
     }
 
@@ -388,8 +401,8 @@ class VideoCapture {
     // Draw violet top gradient
     this.drawTopGradient(compositeCtx, compositeCanvas.width, compositeCanvas.height);
     
-    // Draw word text if visible and not in particles mode
-    if (this.drawGame && (!this.colorCircles || !this.colorCircles.isActive) && this.drawGame.permanentWordElement && this.drawGame.permanentWordElement.style.opacity !== '0') {
+    // Draw word text if visible and not in sphere mode
+    if (this.drawGame && (!this.sphereGame || !this.sphereGame.isActive) && this.drawGame.permanentWordElement && this.drawGame.permanentWordElement.style.opacity !== '0') {
       this.drawWordOnCanvas(compositeCtx, compositeCanvas.width, compositeCanvas.height);
     }
     

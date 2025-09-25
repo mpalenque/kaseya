@@ -75,6 +75,7 @@ body {
   height: 100%;
   object-fit: cover;
   z-index: 1;
+  transform: scaleX(-1); /* Mirror video horizontally for natural selfie view */
 }
 
 #overlay-canvas {
@@ -131,9 +132,9 @@ body {
   radial-gradient(circle at 30% 74%, #8A2BE2 0 6px, transparent 7px),
   radial-gradient(circle at 58% 52%, #A45CFF 0 4px, transparent 5px);
   opacity:0.9; filter:drop-shadow(0 0 4px rgba(0,0,0,0.4)); pointer-events:none; }
-/* Estado activo modo circles: vidrio + halo morado */
-.filter-wrapper.active[data-mode="circles"] .btn-dots { background:rgba(255,255,255,0.18); border-color:#AA3BFF; box-shadow:0 0 22px -2px rgba(170,59,255,0.55),0 0 0 6px rgba(170,59,255,0.25); }
-.filter-wrapper.active[data-mode="circles"] .btn-dots::before { opacity:1; filter:drop-shadow(0 0 6px rgba(170,59,255,0.55)); }
+/* Estado activo modo spheres: vidrio + halo morado */
+.filter-wrapper.active[data-mode="spheres"] .btn-dots { background:rgba(255,255,255,0.18); border-color:#AA3BFF; box-shadow:0 0 22px -2px rgba(170,59,255,0.55),0 0 0 6px rgba(170,59,255,0.25); }
+.filter-wrapper.active[data-mode="spheres"] .btn-dots::before { opacity:1; filter:drop-shadow(0 0 6px rgba(170,59,255,0.55)); }
 .btn-none { background:rgba(255,255,255,0.10); color:#ffffff; }
 .filter-wrapper.active .btn-none { background:rgba(255,255,255,0.18); }
 .filter-btn:hover { background:rgba(255,255,255,0.28); }
@@ -496,7 +497,7 @@ body {
   transform: translate(-50%, 0);
   display: flex;
   gap: clamp(24px, 6vw, 64px); /* responsive gap between buttons */
-  align-items: flex-start;
+  align-items: center;
   z-index: 25; /* above bottomBar (20) and footer (18) but not interfering with other elements */
   pointer-events: none; /* sólo botones clickeables */
 }
@@ -637,12 +638,12 @@ body {
 
 /* Remove old size classes as we're handling sizes dynamically */
 
-/* Word display - hidden in particles mode */
-.particles-mode #word-display {
+/* Word display - hidden in sphere mode */
+.sphere-mode #word-display {
   display: none !important;
 }
 
-.particles-mode .word-text {
+.sphere-mode .word-text {
   display: none !important;
 }
 #word-display {

@@ -39,14 +39,14 @@
     <div id="bottomBar">
       <div class="controls-container">
         <div id="filters-bar" aria-label="Filtros y grabación">
-          <!-- Orden: none (izquierda), circles (centro por defecto), draw/alter ego (derecha) -->
+          <!-- Orden: none (izquierda), spheres (centro por defecto), draw/alter ego (derecha) -->
           <div class="filter-wrapper" data-mode="none" aria-label="Sin filtro">
             <button class="filter-btn btn-none" data-mode="none" data-label="none">
               <span class="btn-inner">✕</span>
             </button>
           </div>
-          <div class="filter-wrapper" data-mode="circles" aria-label="Dots Filter">
-            <button class="filter-btn btn-dots" data-mode="circles" data-label="dots">
+          <div class="filter-wrapper" data-mode="spheres" aria-label="Spheres Filter">
+            <button class="filter-btn btn-dots" data-mode="spheres" data-label="spheres">
               <span class="btn-inner">●</span>
             </button>
           </div>
@@ -83,13 +83,11 @@
           <button id="preview-close" type="button" class="preview-btn preview-cancel" aria-label="Cancel">
             <img src="assets/icons/cancel.svg" alt="Cancel" class="preview-icon" />
           </button>
-          <div class="preview-label">Cancel</div>
         </div>
         <div class="preview-action" data-action="share">
           <button id="preview-share" type="button" class="preview-btn preview-share" aria-label="Share">
             <img src="assets/icons/share.svg" alt="Share" class="preview-icon" />
           </button>
-          <div class="preview-label">Share</div>
         </div>
       </div>
     </div>

@@ -4,8 +4,10 @@ class DrawGame {
     this.currentWord = "What's my tech alter-ego?"; // Texto inicial
     this.isSpinning = false;
     this.permanentWordElement = null;
-    this.ellipsePurple = null;
-    this.ellipseCyan = null;
+  // 3D rings
+  this.ring3DGroup = null;
+  this.ring3DPurple = null;
+  this.ring3DCyan = null;
     this.faceTracker = null;
     
     // Smoothing variables for word tracking
@@ -22,26 +24,38 @@ class DrawGame {
     this.RING_WIDTH_SCALE = 0.83;
     this.RING_HEIGHT_SCALE = 1.5;
     this.RING_ANGLE_BASE = -3;
-    this.RING_ANGLE_DELTA = 1.8;
+  this.RING_ANGLE_DELTA = 4.5; // increase separation/phase between rings for 3D appearance
     this.RING_Y_OFFSET = -14;
+  // 3D ring advanced tuning
+  this.RING_SCALE_MULT = 2.0;            // overall 3D ring size multiplier
+  // 3-axis rotation in radians (apply after head alignment)
+  this.RING_ROT_X_RAD = -0.3;            // forward tilt around X (negative tilts toward camera)
+  this.RING_ROT_Y_RAD = 0.0;             // yaw around Y
+  this.RING_ROT_Z_RAD = 0.0;             // roll around Z
+  this.RING_UP_OFFSET_FACTOR = 0.95;     // forehead height factor (× face radius)
+  this.RING_UP_EXTRA_PX = 0;             // extra vertical offset in screen pixels (fine adjust)
+  this.RING_BEHIND_OFFSET_FACTOR = 0.18; // distance behind face along forward vector (× face radius)
+  this.RING_Z_SEPARATION = 0.05;         // local Z separation factor (× scaleBase)
+  this.RING_CYAN_ROT_Z_OFFSET = 0.6;     // extra z-rotation offset for cyan ring (radians)
     
     // Ring animation
     this.ringAnimRAF = 0;
+  this.ringsTunerPanel = null; // UI panel for adjusting ring params
     
     // Word pool for the roulette
     this.words = [
+      'Devops Alchemist ⚗️',
+      'SaaS Sensei ✨',
+      'Patch Master 🛠️',
+      'Firewall Defender 🔥',
+      'The Authenticator ✅',
       'Debugging Wizard 🧙‍♂️',
-      'Captain Stack Overflow 🧠',
-      'Deadline Denier⏳',
-      'Sir Talks-a-Lot (in Meetings)🎙️',
       'CSS Sorcerer 🎨',
-      'Network Ninja⚡',
-      'Tab Hoarder🧾',
+      'Network Ninja ⚡',
       'Mad Dev Scientist 🧪',
-      'The Code Poet🖋️',
+      'The Code Poet 🖋️',
       'WiFi Wizard 📶',
       'Cloud Prophet ☁️',
-      'Meme Lord 👑',
       'Tech Legend 🤘',
       'Ticket Slayer 🏴‍☠️'
     ];
@@ -53,6 +67,26 @@ class DrawGame {
     this.createDrawEllipses();
     this.createRingsTuner();
     this.startRingAnimation();
+
+    // Keyboard shortcut to toggle rings tuner (Ctrl+I / Cmd+I)
+    window.addEventListener('keydown', (e) => {
+      // Ignore if typing in inputs/contenteditable
+      const t = e.target;
+      const tag = t && t.tagName ? t.tagName.toLowerCase() : '';
+      const isTyping = tag === 'input' || tag === 'textarea' || (t && t.isContentEditable);
+      if (isTyping) return;
+
+      const isToggle = (e.key === 'i' || e.key === 'I') && (e.ctrlKey || e.metaKey);
+      if (isToggle) {
+        e.preventDefault();
+        this.toggleRingsTuner();
+      }
+    });
+
+    // Try to create 3D rings immediately if scene is already available on faceTracker
+    try {
+      this.create3DRings(this.faceTracker);
+    } catch (e) {}
     
     // Setup resize handler
     window.addEventListener('resize', () => {
@@ -80,24 +114,8 @@ class DrawGame {
   }
 
   createDrawEllipses() {
-    // Purple ellipse (#AA3BFF)
-    this.ellipsePurple = document.createElement('div');
-    this.ellipsePurple.className = 'draw-ellipse ellipse-purple';
-    this.ellipsePurple.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none"><ellipse cx="50" cy="50" rx="45" ry="25" fill="none" stroke="currentColor" stroke-width="4" vector-effect="non-scaling-stroke"/></svg>';
-    document.body.appendChild(this.ellipsePurple);
-
-    // Cyan ellipse (#00F0FF)
-    this.ellipseCyan = document.createElement('div');
-    this.ellipseCyan.className = 'draw-ellipse ellipse-cyan';
-    this.ellipseCyan.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none"><ellipse cx="50" cy="50" rx="45" ry="25" fill="none" stroke="currentColor" stroke-width="4" vector-effect="non-scaling-stroke"/></svg>';
-    document.body.appendChild(this.ellipseCyan);
-
-    // Start hidden until positioned
-    this.ellipsePurple.style.opacity = '0';
-    this.ellipseCyan.style.opacity = '0';
-    // Hide DOM SVG rings to avoid duplication; we'll render rings on the overlay canvas
-    this.ellipsePurple.style.display = 'none';
-    this.ellipseCyan.style.display = 'none';
+    // No DOM ellipses anymore - we create 3D rings in the THREE.js scene so they can be occluded by the face occluder.
+    // Creation of the 3D rings is deferred until THREE.js scene is available (see create3DRings).
   }
 
   updateWordPositionForMode(isDrawMode) {
@@ -139,71 +157,202 @@ class DrawGame {
     this.permanentWordElement.style.top = `${this.smoothWordY}px`;
     this.permanentWordElement.style.transform = 'translateX(-50%)';
 
-    // Update ellipses behind the banner (only in draw mode)
-    if (this.ellipsePurple && this.ellipseCyan) {
-      if (!isDrawMode) {
-        this.ellipsePurple.style.opacity = '0';
-        this.ellipseCyan.style.opacity = '0';
-      } else {
-        this.updateEllipsesPosition();
-      }
+    // Update 3D rings behind the banner (only in draw mode). Rings follow face tracking.
+    if (!isDrawMode) {
+      this.set3DRingsVisible(false);
+    } else {
+      this.update3DRingsPosition();
     }
   }
 
   updateEllipsesPosition() {
-    const bannerW = this.permanentWordElement.clientWidth || 360;
-    const bannerH = this.permanentWordElement.clientHeight || 120;
-    const centerX = this.smoothWordX;
-    const bannerBottomY = this.smoothWordY + bannerH;
-
-    // Elliptical ring sizes relative to banner
-    const ring1W = Math.round(bannerW * 1.25 * this.RING_WIDTH_SCALE);
-    const ring1H = Math.max(12, Math.round(bannerH * 0.42 * this.RING_HEIGHT_SCALE));
-    const ring2W = ring1W;
-    const ring2H = ring1H;
-
-    // Shared geometry
-    [this.ellipsePurple, this.ellipseCyan].forEach(el => {
-      el.style.position = 'fixed';
-      el.style.left = `${centerX}px`;
-      el.style.zIndex = '14'; // behind banner
-      el.style.pointerEvents = 'none';
-      el.style.background = 'transparent';
-    });
-
-    // Individual sizes
-    this.ellipsePurple.style.width = `${ring1W}px`;
-    this.ellipsePurple.style.height = `${ring1H}px`;
-    const lift = Math.round(bannerH * 0.10);
-    this.ellipsePurple.style.top = `${bannerBottomY + ring1H / 2 + this.RING_Y_OFFSET - lift}px`;
-    this.ellipsePurple.style.transform = 'translate(-50%, -50%)';
-    
-    const svgP = this.ellipsePurple.querySelector('svg');
-    if (svgP) { 
-      this.displayBlock(svgP); 
-      svgP.style.transformOrigin = '50% 50%'; 
-      svgP.style.willChange = 'transform'; 
-    }
-
-    this.ellipseCyan.style.width = `${ring2W}px`;
-    this.ellipseCyan.style.height = `${ring2H}px`;
-    this.ellipseCyan.style.top = `${bannerBottomY + ring2H / 2 + this.RING_Y_OFFSET - lift}px`;
-    this.ellipseCyan.style.transform = 'translate(-50%, -50%)';
-    
-    const svgC = this.ellipseCyan.querySelector('svg');
-    if (svgC) { 
-      this.displayBlock(svgC); 
-      svgC.style.transformOrigin = '50% 50%'; 
-      svgC.style.willChange = 'transform'; 
-    }
-
-    // Make visible
-    this.ellipsePurple.style.opacity = '1';
-    this.ellipseCyan.style.opacity = '1';
+    // Deprecated - 3D rings will be positioned via update3DRingsPosition
   }
 
-  displayBlock(el) { 
-    el.style.display = 'block'; 
+  // Create 3D rings in the faceTracker THREE.js scene so they are occluded by the face occluder.
+  create3DRings(faceTracker) {
+    if (!faceTracker || !faceTracker.scene || !window.THREE) return;
+    if (this.ring3DGroup) return; // already created
+
+    const THREE = window.THREE;
+    this.ring3DGroup = new THREE.Group();
+    this.ring3DGroup.name = 'draw-game-rings';
+
+    const torusGeo = new THREE.TorusGeometry(1.0, 0.05, 32, 120);
+
+    const matP = new THREE.MeshStandardMaterial({ color: 0xAA3BFF, emissive: 0x5511AA, roughness: 0.4, metalness: 0.2 });
+    const matC = new THREE.MeshStandardMaterial({ color: 0x00F0FF, emissive: 0x003344, roughness: 0.35, metalness: 0.1 });
+
+    this.ring3DPurple = new THREE.Mesh(torusGeo.clone(), matP);
+    this.ring3DCyan = new THREE.Mesh(torusGeo.clone(), matC);
+
+    // Slightly different radii
+    this.ring3DPurple.scale.setScalar(1.0);
+    this.ring3DCyan.scale.setScalar(1.05);
+
+  // Orient the torus so the ring stands vertically (wraps around the head)
+  this.ring3DPurple.rotation.x = Math.PI / 2;
+  this.ring3DCyan.rotation.x = Math.PI / 2;
+
+  // Slightly rotate the second ring so they don't perfectly overlap
+  this.ring3DCyan.rotation.z = this.RING_CYAN_ROT_Z_OFFSET; // configurable offset between rings
+
+  // Render order: keep them after occluder (occluder uses renderOrder -1/0), so set > 0
+  this.ring3DPurple.renderOrder = 1;
+  this.ring3DCyan.renderOrder = 1;
+
+    this.ring3DGroup.add(this.ring3DPurple);
+    this.ring3DGroup.add(this.ring3DCyan);
+
+    // Default hidden until positioned near a detected face
+    this.ring3DGroup.visible = false;
+
+    faceTracker.scene.add(this.ring3DGroup);
+  }
+
+  set3DRingsVisible(visible) {
+    if (this.ring3DGroup) this.ring3DGroup.visible = !!visible;
+  }
+
+  update3DRingsPosition() {
+    if (!this.faceTracker) return;
+    const ft = this.faceTracker;
+    // Ensure rings created when scene becomes available
+    if (!this.ring3DGroup && ft.scene && window.THREE) {
+      this.create3DRings(ft);
+    }
+
+    if (!this.ring3DGroup) return;
+
+    const hasFace = ft.getCurrentFaces && ft.getCurrentFaces().length > 0;
+    if (!hasFace) {
+      this.set3DRingsVisible(false);
+      return;
+    }
+
+    // Position rings relative to head / face collider
+    const center = ft.faceColliderCenter ? ft.faceColliderCenter.clone() : (ft.getHeadPosition ? ft.getHeadPosition().world : new THREE.Vector3(0,0,3));
+    const radius = ft.faceColliderRadius || (ft.getHeadPosition ? ft.getHeadPosition().colliderRadius : 0.8);
+
+    // Place rings slightly above forehead (y up)
+  let upOffset = radius * this.RING_UP_OFFSET_FACTOR; // base forehead height in world units
+  // Add extra vertical offset converted from screen pixels to world units using face bounds heuristic
+  try {
+    const bounds = ft.getFaceBoundingBox ? ft.getFaceBoundingBox() : null;
+    if (bounds && bounds.height) {
+      const worldPerPixel = (radius * 2) / bounds.height; // approx: collider diameter maps to face pixel height
+      upOffset += (this.RING_UP_EXTRA_PX || 0) * worldPerPixel;
+    }
+  } catch(e) {}
+
+    // If headOccluderRoot is available, position rings relative to occluder's world transform so they rotate/translate with the head
+    if (ft.headOccluderRoot) {
+      try {
+        const root = ft.headOccluderRoot;
+        // use headPosSmoothed if available
+        const headPos = ft.headPosSmoothed ? ft.headPosSmoothed.clone() : center.clone();
+        // forward direction in world space from occluder orientation
+        const forwardWorld = new THREE.Vector3(0, 0, 1).applyQuaternion(root.quaternion).normalize();
+        // move slightly behind the face along forwardWorld (negative direction)
+  const behindOffset = radius * this.RING_BEHIND_OFFSET_FACTOR; // configurable depth
+  const upWorld = new THREE.Vector3(0, 1, 0).applyQuaternion(root.quaternion).normalize();
+  const pos = headPos.clone().addScaledVector(forwardWorld, -behindOffset);
+  // Move upward relative to the head orientation
+  pos.addScaledVector(upWorld, upOffset);
+        this.ring3DGroup.position.copy(pos);
+
+        // Align the ring group's normal (Z) to forwardWorld so the ring stands vertically around the head
+        const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), forwardWorld);
+        this.ring3DGroup.quaternion.copy(q);
+        // Apply user rotations (X/Y/Z) after alignment
+        try {
+          const eul = new THREE.Euler(this.RING_ROT_X_RAD, this.RING_ROT_Y_RAD, this.RING_ROT_Z_RAD, 'XYZ');
+          const qRot = new THREE.Quaternion().setFromEuler(eul);
+          this.ring3DGroup.quaternion.multiply(qRot);
+        } catch(e) {}
+        // Also add a small local Y offset proportional to extra PX to make the control visibly affect height
+        // Convert px to approx world units using bounds heuristic computed above
+        try {
+          const bounds = ft.getFaceBoundingBox ? ft.getFaceBoundingBox() : null;
+          if (bounds && bounds.height) {
+            const worldPerPixel = (radius * 2) / bounds.height;
+            const localYOffset = (this.RING_UP_EXTRA_PX || 0) * worldPerPixel;
+            // Move along the group's local Y axis
+            const localUp = new THREE.Vector3(0, 1, 0).applyQuaternion(this.ring3DGroup.quaternion).normalize();
+            this.ring3DGroup.position.addScaledVector(localUp, localYOffset);
+          }
+        } catch(e) {}
+      } catch (e) {
+        // fallback to camera-based method below
+  const behindOffset = radius * this.RING_BEHIND_OFFSET_FACTOR;
+        if (ft.camera && ft.camera.position) {
+          const camDir = center.clone().sub(ft.camera.position).normalize();
+          const upWorld = ft.camera.up ? ft.camera.up.clone().normalize() : new THREE.Vector3(0,1,0);
+          const pos = center.clone().addScaledVector(camDir, behindOffset);
+          pos.addScaledVector(upWorld, upOffset);
+          this.ring3DGroup.position.copy(pos);
+        } else {
+          this.ring3DGroup.position.copy(center);
+          this.ring3DGroup.position.addScaledVector(new THREE.Vector3(0,1,0), upOffset);
+          this.ring3DGroup.position.z += behindOffset;
+        }
+        // Apply user rotations around default orientation when occluder alignment fails
+        try {
+          this.ring3DGroup.quaternion.set(0, 0, 0, 1);
+          const eul = new THREE.Euler(this.RING_ROT_X_RAD, this.RING_ROT_Y_RAD, this.RING_ROT_Z_RAD, 'XYZ');
+          const qRot = new THREE.Quaternion().setFromEuler(eul);
+          this.ring3DGroup.quaternion.multiply(qRot);
+        } catch (e2) {}
+      }
+    } else {
+      // Compute a camera-relative offset so rings sit behind the face (away from the camera)
+  let behindOffset = radius * this.RING_BEHIND_OFFSET_FACTOR;
+      if (ft.camera && ft.camera.position) {
+        const camDir = center.clone().sub(ft.camera.position).normalize();
+        const upWorld = ft.camera.up ? ft.camera.up.clone().normalize() : new THREE.Vector3(0,1,0);
+        const pos = center.clone().addScaledVector(camDir, behindOffset);
+        pos.addScaledVector(upWorld, upOffset);
+        this.ring3DGroup.position.copy(pos);
+      } else {
+        // Fallback: simple world Z offset
+        this.ring3DGroup.position.copy(center);
+        this.ring3DGroup.position.addScaledVector(new THREE.Vector3(0,1,0), upOffset);
+        this.ring3DGroup.position.z += behindOffset;
+      }
+      // Apply user rotations even without occluder alignment
+      try {
+        this.ring3DGroup.quaternion.set(0, 0, 0, 1);
+        const eul = new THREE.Euler(this.RING_ROT_X_RAD, this.RING_ROT_Y_RAD, this.RING_ROT_Z_RAD, 'XYZ');
+        const qRot = new THREE.Quaternion().setFromEuler(eul);
+        this.ring3DGroup.quaternion.multiply(qRot);
+      } catch (e3) {}
+      // Add local Y offset in fallback too
+      try {
+        const bounds = ft.getFaceBoundingBox ? ft.getFaceBoundingBox() : null;
+        if (bounds && bounds.height) {
+          const worldPerPixel = (radius * 2) / bounds.height;
+          const localYOffset = (this.RING_UP_EXTRA_PX || 0) * worldPerPixel;
+          const localUp = new THREE.Vector3(0, 1, 0).applyQuaternion(this.ring3DGroup.quaternion).normalize();
+          this.ring3DGroup.position.addScaledVector(localUp, localYOffset);
+        }
+      } catch(e) {}
+    }
+
+    // Offset individual rings slightly so they don't perfectly overlap
+    this.ring3DPurple.position.set(0, 0, 0);
+    this.ring3DCyan.position.set(0, 0, 0);
+
+    // Scale rings according to face width / radius
+  const scaleBase = Math.max(0.35, radius * 1.15);
+    // Apply configurable overall 3D size multiplier
+    this.ring3DPurple.scale.setScalar(scaleBase * this.RING_WIDTH_SCALE * this.RING_SCALE_MULT);
+    this.ring3DCyan.scale.setScalar(scaleBase * (this.RING_WIDTH_SCALE * 1.05) * this.RING_SCALE_MULT);
+
+  // Slightly offset rings in local Z to create parallax depth (one sits a bit further back)
+  this.ring3DPurple.position.set(0, 0, -this.RING_Z_SEPARATION * scaleBase);
+  this.ring3DCyan.position.set(0, 0, this.RING_Z_SEPARATION * scaleBase);
+
+    this.set3DRingsVisible(true);
   }
 
   startRingAnimation() {
@@ -218,25 +367,56 @@ class DrawGame {
     const step = (now) => {
       const t = now / 1000;
 
+      // Animate 2D DOM rings if they still exist (unlikely since removed), keep for backward-compat
       if (this.ellipsePurple) {
-        const svgP = this.ellipsePurple.querySelector('svg');
-        if (svgP) {
-          const baseP = this.RING_ANGLE_BASE + (this.RING_ANGLE_DELTA / 2);
-          const animRot = Math.sin(2 * Math.PI * rotFreq * t + phasePurple) * rotAmp;
-          const animBob = Math.sin(2 * Math.PI * bobFreq * t + phasePurple) * bobAmp;
-          const visible = (this.ellipsePurple.style.opacity !== '0');
-          svgP.style.transform = `rotate(${baseP + animRot}deg) translateY(${visible ? animBob : 0}px)`;
-        }
+        try {
+          const svgP = this.ellipsePurple.querySelector && this.ellipsePurple.querySelector('svg');
+          if (svgP) {
+            const baseP = this.RING_ANGLE_BASE + (this.RING_ANGLE_DELTA / 2);
+            const animRot = Math.sin(2 * Math.PI * rotFreq * t + phasePurple) * rotAmp;
+            const animBob = Math.sin(2 * Math.PI * bobFreq * t + phasePurple) * bobAmp;
+            const visible = (this.ellipsePurple.style.opacity !== '0');
+            svgP.style.transform = `rotate(${baseP + animRot}deg) translateY(${visible ? animBob : 0}px)`;
+          }
+        } catch (e) {}
       }
 
       if (this.ellipseCyan) {
-        const svgC = this.ellipseCyan.querySelector('svg');
-        if (svgC) {
-          const baseC = this.RING_ANGLE_BASE - (this.RING_ANGLE_DELTA / 2);
-          const animRot = Math.sin(2 * Math.PI * rotFreq * t + phaseCyan) * rotAmp * 0.9;
-          const animBob = Math.sin(2 * Math.PI * bobFreq * t + phaseCyan) * bobAmp * 0.9;
-          const visible = (this.ellipseCyan.style.opacity !== '0');
-          svgC.style.transform = `rotate(${baseC + animRot}deg) translateY(${visible ? animBob : 0}px)`;
+        try {
+          const svgC = this.ellipseCyan.querySelector && this.ellipseCyan.querySelector('svg');
+          if (svgC) {
+            const baseC = this.RING_ANGLE_BASE - (this.RING_ANGLE_DELTA / 2);
+            const animRot = Math.sin(2 * Math.PI * rotFreq * t + phaseCyan) * rotAmp * 0.9;
+            const animBob = Math.sin(2 * Math.PI * bobFreq * t + phaseCyan) * bobAmp * 0.9;
+            const visible = (this.ellipseCyan.style.opacity !== '0');
+            svgC.style.transform = `rotate(${baseC + animRot}deg) translateY(${visible ? animBob : 0}px)`;
+          }
+        } catch (e) {}
+      }
+
+      // Animate 3D rings if present
+      if (this.ring3DGroup && window.THREE) {
+        try {
+          const THREE = window.THREE;
+          // Purple
+          if (this.ring3DPurple) {
+            const baseP = (this.RING_ANGLE_BASE + (this.RING_ANGLE_DELTA / 2)) * (Math.PI / 180);
+            const animRot = Math.sin(2 * Math.PI * rotFreq * t + phasePurple) * (rotAmp * Math.PI / 180);
+            const animBob = Math.sin(2 * Math.PI * bobFreq * t + phasePurple) * (bobAmp * 0.01); // convert px -> world approx
+            this.ring3DPurple.rotation.z = baseP + animRot;
+            this.ring3DPurple.position.y = animBob * 0.5;
+          }
+
+          // Cyan
+          if (this.ring3DCyan) {
+            const baseC = (this.RING_ANGLE_BASE - (this.RING_ANGLE_DELTA / 2)) * (Math.PI / 180);
+            const animRot = Math.sin(2 * Math.PI * rotFreq * t + phaseCyan) * (rotAmp * 0.9 * Math.PI / 180);
+            const animBob = Math.sin(2 * Math.PI * bobFreq * t + phaseCyan) * (bobAmp * 0.009);
+            this.ring3DCyan.rotation.z = baseC + animRot;
+            this.ring3DCyan.position.y = animBob * 0.5;
+          }
+        } catch (e) {
+          // swallow animation errors
         }
       }
 
@@ -278,6 +458,55 @@ class DrawGame {
         </label>
         <span id="rt-h-val" style="min-width:46px; text-align:right; display:inline-block;">${Math.round(this.RING_HEIGHT_SCALE*100)}%</span>
       </div>
+      <hr style="border:none; border-top:1px solid rgba(255,255,255,0.2); margin:8px 0;" />
+      <div class="rt-row" style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+        <label style="white-space:nowrap;">Tamaño 3D
+          <input id="rt-3d-scale" type="range" min="50" max="300" step="5" value="${Math.round(this.RING_SCALE_MULT*100)}" style="vertical-align:middle; width: 160px; margin-left:6px;">
+        </label>
+        <span id="rt-3d-scale-val" style="min-width:56px; text-align:right; display:inline-block;">${Math.round(this.RING_SCALE_MULT*100)}%</span>
+      </div>
+      <div class="rt-row" style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+        <label style="white-space:nowrap;">Rot X (°)
+          <input id="rt-3d-rotx" type="range" min="-90" max="90" step="1" value="${Math.round(this.RING_ROT_X_RAD*180/Math.PI)}" style="vertical-align:middle; width: 160px; margin-left:6px;">
+        </label>
+        <span id="rt-3d-rotx-val" style="min-width:56px; text-align:right; display:inline-block;">${Math.round(this.RING_ROT_X_RAD*180/Math.PI)}°</span>
+      </div>
+      <div class="rt-row" style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+        <label style="white-space:nowrap;">Rot Y (°)
+          <input id="rt-3d-roty" type="range" min="-90" max="90" step="1" value="${Math.round(this.RING_ROT_Y_RAD*180/Math.PI)}" style="vertical-align:middle; width: 160px; margin-left:6px;">
+        </label>
+        <span id="rt-3d-roty-val" style="min-width:56px; text-align:right; display:inline-block;">${Math.round(this.RING_ROT_Y_RAD*180/Math.PI)}°</span>
+      </div>
+      <div class="rt-row" style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+        <label style="white-space:nowrap;">Rot Z (°)
+          <input id="rt-3d-rotz" type="range" min="-90" max="90" step="1" value="${Math.round(this.RING_ROT_Z_RAD*180/Math.PI)}" style="vertical-align:middle; width: 160px; margin-left:6px;">
+        </label>
+        <span id="rt-3d-rotz-val" style="min-width:56px; text-align:right; display:inline-block;">${Math.round(this.RING_ROT_Z_RAD*180/Math.PI)}°</span>
+      </div>
+      <div class="rt-row" style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+        <label style="white-space:nowrap;">Altura base (%)
+          <input id="rt-3d-up" type="range" min="30" max="200" step="1" value="${Math.round(this.RING_UP_OFFSET_FACTOR*100)}" style="vertical-align:middle; width: 160px; margin-left:6px;">
+        </label>
+        <span id="rt-3d-up-val" style="min-width:56px; text-align:right; display:inline-block;">${Math.round(this.RING_UP_OFFSET_FACTOR*100)}%</span>
+      </div>
+      <div class="rt-row" style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+        <label style="white-space:nowrap;">Altura extra (px)
+          <input id="rt-3d-upx" type="range" min="-200" max="200" step="1" value="${this.RING_UP_EXTRA_PX}" style="vertical-align:middle; width: 160px; margin-left:6px;">
+        </label>
+        <span id="rt-3d-upx-val" style="min-width:56px; text-align:right; display:inline-block;">${this.RING_UP_EXTRA_PX}px</span>
+      </div>
+      <div class="rt-row" style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+        <label style="white-space:nowrap;">Profundidad (×r)
+          <input id="rt-3d-depth" type="range" min="0" max="80" step="1" value="${Math.round(this.RING_BEHIND_OFFSET_FACTOR*100)}" style="vertical-align:middle; width: 160px; margin-left:6px;">
+        </label>
+        <span id="rt-3d-depth-val" style="min-width:56px; text-align:right; display:inline-block;">${Math.round(this.RING_BEHIND_OFFSET_FACTOR*100)}%</span>
+      </div>
+      <div class="rt-row" style="display:flex; align-items:center; gap:8px;">
+        <label style="white-space:nowrap;">Separación Z
+          <input id="rt-3d-zsep" type="range" min="0" max="20" step="0.5" value="${(this.RING_Z_SEPARATION*100).toFixed(0)}" style="vertical-align:middle; width: 160px; margin-left:6px;">
+        </label>
+        <span id="rt-3d-zsep-val" style="min-width:56px; text-align:right; display:inline-block;">${(this.RING_Z_SEPARATION*100).toFixed(0)}%</span>
+      </div>
     `;
 
     // Add delta slider row
@@ -301,10 +530,20 @@ class DrawGame {
       <span id="rt-y-val" style="min-width:46px; text-align:right; display:inline-block;">${this.RING_Y_OFFSET}px</span>
     `;
     panel.appendChild(yRow);
-    document.body.appendChild(panel);
+  document.body.appendChild(panel);
+  this.ringsTunerPanel = panel;
 
     // Setup event listeners
     this.setupTunerEventListeners(panel);
+    this.setup3DTunerEventListeners(panel);
+  }
+
+  toggleRingsTuner(forceState) {
+    const panel = this.ringsTunerPanel || document.getElementById('rings-tuner');
+    if (!panel) return;
+    const isHidden = panel.style.display === 'none' || getComputedStyle(panel).display === 'none';
+    const show = typeof forceState === 'boolean' ? forceState : isHidden;
+    panel.style.display = show ? 'block' : 'none';
   }
 
   setupTunerEventListeners(panel) {
@@ -316,8 +555,11 @@ class DrawGame {
     const hVal = panel.querySelector('#rt-h-val');
     const d = panel.querySelector('#rt-delta');
     const dVal = panel.querySelector('#rt-delta-val');
-    const y = panel.querySelector('#rt-y');
-    const yVal = panel.querySelector('#rt-y-val');
+  const y = panel.querySelector('#rt-y');
+  const yVal = panel.querySelector('#rt-y-val');
+  // Cross-link to 3D extra height controls for sync
+  const upxMirror = panel.querySelector('#rt-3d-upx');
+  const upxMirrorVal = panel.querySelector('#rt-3d-upx-val');
 
     const refresh = () => {
       rotVal.textContent = `${this.RING_ANGLE_BASE.toFixed(1)}°/Δ${this.RING_ANGLE_DELTA.toFixed(1)}°`;
@@ -349,7 +591,98 @@ class DrawGame {
     y.addEventListener('input', (e) => {
       this.RING_Y_OFFSET = parseInt(e.target.value, 10) || 0;
       yVal.textContent = `${this.RING_Y_OFFSET}px`;
+      // Map 2D Y offset slider to 3D extra vertical offset in px so it affects 3D rings too
+      this.RING_UP_EXTRA_PX = this.RING_Y_OFFSET;
+      if (upxMirror) upxMirror.value = String(this.RING_UP_EXTRA_PX);
+      if (upxMirrorVal) upxMirrorVal.textContent = `${this.RING_UP_EXTRA_PX}px`;
+      try { this.update3DRingsPosition(); } catch(e) {}
       refresh();
+    });
+  }
+
+  setup3DTunerEventListeners(panel) {
+    const scale = panel.querySelector('#rt-3d-scale');
+    const scaleVal = panel.querySelector('#rt-3d-scale-val');
+    const rotx = panel.querySelector('#rt-3d-rotx');
+    const rotxVal = panel.querySelector('#rt-3d-rotx-val');
+    const roty = panel.querySelector('#rt-3d-roty');
+    const rotyVal = panel.querySelector('#rt-3d-roty-val');
+    const rotz = panel.querySelector('#rt-3d-rotz');
+    const rotzVal = panel.querySelector('#rt-3d-rotz-val');
+    const up = panel.querySelector('#rt-3d-up');
+    const upVal = panel.querySelector('#rt-3d-up-val');
+    const upx = panel.querySelector('#rt-3d-upx');
+    const upxVal = panel.querySelector('#rt-3d-upx-val');
+    const depth = panel.querySelector('#rt-3d-depth');
+    const depthVal = panel.querySelector('#rt-3d-depth-val');
+  const zsep = panel.querySelector('#rt-3d-zsep');
+  const zsepVal = panel.querySelector('#rt-3d-zsep-val');
+  // Cross-link to legacy Y offset controls for sync
+  const yMirror = panel.querySelector('#rt-y');
+  const yMirrorVal = panel.querySelector('#rt-y-val');
+
+    const refreshVals = () => {
+      scaleVal.textContent = `${Math.round(this.RING_SCALE_MULT*100)}%`;
+      rotxVal.textContent = `${Math.round(this.RING_ROT_X_RAD*180/Math.PI)}°`;
+      rotyVal.textContent = `${Math.round(this.RING_ROT_Y_RAD*180/Math.PI)}°`;
+      rotzVal.textContent = `${Math.round(this.RING_ROT_Z_RAD*180/Math.PI)}°`;
+      upVal.textContent = `${Math.round(this.RING_UP_OFFSET_FACTOR*100)}%`;
+      upxVal.textContent = `${this.RING_UP_EXTRA_PX}px`;
+      depthVal.textContent = `${Math.round(this.RING_BEHIND_OFFSET_FACTOR*100)}%`;
+      zsepVal.textContent = `${(this.RING_Z_SEPARATION*100).toFixed(0)}%`;
+    };
+
+    const forceUpdate = () => { try { this.update3DRingsPosition(); } catch(e) {} };
+    scale.addEventListener('input', (e) => {
+      this.RING_SCALE_MULT = Math.max(0.3, parseInt(e.target.value, 10) / 100);
+      refreshVals();
+      forceUpdate();
+    });
+
+    rotx.addEventListener('input', (e) => {
+      const deg = parseInt(e.target.value, 10) || 0;
+      this.RING_ROT_X_RAD = deg * Math.PI / 180;
+      refreshVals();
+      forceUpdate();
+    });
+    roty.addEventListener('input', (e) => {
+      const deg = parseInt(e.target.value, 10) || 0;
+      this.RING_ROT_Y_RAD = deg * Math.PI / 180;
+      refreshVals();
+      forceUpdate();
+    });
+    rotz.addEventListener('input', (e) => {
+      const deg = parseInt(e.target.value, 10) || 0;
+      this.RING_ROT_Z_RAD = deg * Math.PI / 180;
+      refreshVals();
+      forceUpdate();
+    });
+
+    up.addEventListener('input', (e) => {
+      this.RING_UP_OFFSET_FACTOR = Math.max(0, parseInt(e.target.value, 10) / 100);
+      refreshVals();
+      forceUpdate();
+    });
+    upx.addEventListener('input', (e) => {
+      this.RING_UP_EXTRA_PX = parseInt(e.target.value, 10) || 0;
+      refreshVals();
+      forceUpdate();
+      // Keep legacy Y offset slider in sync so user perceives one control
+      this.RING_Y_OFFSET = this.RING_UP_EXTRA_PX;
+      if (yMirror) yMirror.value = String(this.RING_Y_OFFSET);
+      if (yMirrorVal) yMirrorVal.textContent = `${this.RING_Y_OFFSET}px`;
+    });
+
+    depth.addEventListener('input', (e) => {
+      this.RING_BEHIND_OFFSET_FACTOR = Math.max(0, parseInt(e.target.value, 10) / 100);
+      refreshVals();
+      forceUpdate();
+    });
+
+    zsep.addEventListener('input', (e) => {
+      this.RING_Z_SEPARATION = Math.max(0, parseFloat(e.target.value) / 100);
+      refreshVals();
+      forceUpdate();
     });
   }
 
@@ -394,19 +727,15 @@ class DrawGame {
     const inner = this.permanentWordElement.querySelector('.word-inner');
     if (inner) {
       inner.textContent = finalWord;
-      inner.classList.add('final');
+      // Do not add 'final' class to avoid yellow highlight in live view
     }
-    this.permanentWordElement.className = 'word-text final';
+    this.permanentWordElement.className = 'word-text';
     this.autoFitWordBanner();
     
     // Keep the final effect for a bit, then return to normal
     setTimeout(() => {
       if (this.permanentWordElement) {
         this.permanentWordElement.className = 'word-text';
-        const inner = this.permanentWordElement.querySelector('.word-inner');
-        if (inner) {
-          inner.classList.remove('final');
-        }
       }
       this.isSpinning = false;
     }, 3000);
@@ -520,6 +849,29 @@ class DrawGame {
       cancelAnimationFrame(this.ringAnimRAF);
       this.ringAnimRAF = 0;
     }
+    // Remove 3D rings from scene and dispose geometries/materials
+    try {
+      if (this.ring3DGroup) {
+        if (this.faceTracker && this.faceTracker.scene) {
+          this.faceTracker.scene.remove(this.ring3DGroup);
+        }
+        this.ring3DGroup.traverse((obj) => {
+          if (obj.geometry) {
+            obj.geometry.dispose && obj.geometry.dispose();
+          }
+          if (obj.material) {
+            if (Array.isArray(obj.material)) {
+              obj.material.forEach(m => m.dispose && m.dispose());
+            } else {
+              obj.material.dispose && obj.material.dispose();
+            }
+          }
+        });
+        this.ring3DGroup = null;
+        this.ring3DPurple = null;
+        this.ring3DCyan = null;
+      }
+    } catch (e) {}
   }
 }
 

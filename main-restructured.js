@@ -6,7 +6,7 @@ class KaseyaApp {
   constructor() {
     // Core modules
     this.faceTracker = null;
-    this.colorCircles = null;
+    this.sphereGame = null;
     this.drawGame = null;
     this.videoCapture = null;
     this.uiManager = null;
@@ -97,24 +97,24 @@ class KaseyaApp {
     await this.faceTracker.init(this.webcamEl);
     this.faceTracker.startDetection();
     
-    // Initialize Color Circles
-    this.colorCircles = new ColorCircles();
-    this.colorCircles.init(this.faceTracker);
+    // Initialize Sphere Game
+    this.sphereGame = new SphereGame();
+    this.sphereGame.init(this.faceTracker);
     
     // Initialize Draw Game
     this.drawGame = new DrawGame();
     this.drawGame.init(this.faceTracker);
     
-    // Initialize Video Capture
-    this.videoCapture = new VideoCapture();
-    await this.videoCapture.init(this.webcamEl, this.drawGame, this.colorCircles);
+  // Initialize Video Capture
+  this.videoCapture = new VideoCapture();
+  await this.videoCapture.init(this.webcamEl, this.drawGame, this.sphereGame, this.faceTracker);
     
     // Initialize UI Manager
     this.uiManager = new UIManager();
     this.uiManager.init({
       videoCapture: this.videoCapture,
       drawGame: this.drawGame,
-      colorCircles: this.colorCircles,
+      sphereGame: this.sphereGame,
       faceTracker: this.faceTracker
     });
   }
@@ -133,15 +133,21 @@ class KaseyaApp {
     // Clear canvas
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     
-    // Skip drawing if in particles mode
-    if (this.colorCircles && this.colorCircles.isActive) {
+    // In draw mode, render the 3D scene (rings) and skip 2D rings
+    const mode = this.uiManager.getCurrentMode();
+    if (mode === 'draw') {
+      if (this.faceTracker && this.faceTracker.renderer && this.faceTracker.scene && this.faceTracker.camera) {
+        // Ensure spheres group hidden in draw mode
+        if (this.sphereGame && this.sphereGame.spheresGroup) {
+          this.sphereGame.spheresGroup.visible = false;
+        }
+        this.faceTracker.renderer.render(this.faceTracker.scene, this.faceTracker.camera);
+      }
       return;
     }
-    
-    // Draw rings on canvas so they are included in recorded captures
-    if (this.drawGame && this.uiManager.getCurrentMode() === 'draw') {
-      this.drawGame.drawRingsOnCanvas(this.ctx, this.canvas.width, this.canvas.height);
-    }
+
+    // Skip overlay if sphere mode (sphere game renders on its own)
+    if (mode === 'spheres') return;
   }
 
   // Cleanup method
@@ -154,7 +160,7 @@ class KaseyaApp {
     
     // Cleanup modules
     this.faceTracker?.stopDetection();
-    this.colorCircles?.deactivate();
+    this.sphereGame?.deactivate();
     this.drawGame?.cleanup();
     this.videoCapture?.stopVideoRecording();
     this.uiManager?.cleanup();
@@ -163,15 +169,35 @@ class KaseyaApp {
 
 // Load all module scripts and initialize the app
 async function loadModulesAndInit() {
-  const modules = [
-    'modules/face-tracker.js',
-    'modules/color-circles.js', 
-    'modules/draw-game.js',
-    'modules/video-capture.js',
-    'modules/ui-manager.js'
-  ];
-
   try {
+    // Load THREE.js first as a global script (not as module)
+    await loadScript('https://unpkg.com/three@0.160.0/build/three.min.js');
+    
+    // Add a small delay to ensure THREE.js is fully loaded
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Verify THREE.js is loaded
+    if (typeof THREE === 'undefined') {
+      throw new Error('THREE.js failed to load');
+    }
+    
+    // Load FBXLoader dynamically as ES6 module
+    try {
+      const { FBXLoader } = await import('https://unpkg.com/three@0.160.0/examples/jsm/loaders/FBXLoader.js');
+      THREE.FBXLoader = FBXLoader;
+      console.log('FBXLoader loaded successfully');
+    } catch (e) {
+      console.warn('FBXLoader failed to load:', e);
+    }
+    
+    const modules = [
+      'modules/face-tracker.js',
+      'modules/sphere-game.js', 
+      'modules/draw-game.js',
+      'modules/video-capture.js',
+      'modules/ui-manager.js'
+    ];
+
     // Load all modules
     for (const module of modules) {
       await loadScript(module);
