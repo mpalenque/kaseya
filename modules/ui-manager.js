@@ -127,14 +127,24 @@ class UIManager {
     // Handle sphere mode
     if (mode === 'spheres') {
       if (!this.sphereGame) return;
+      
+      // Force complete reactivation to ensure spheres always appear
       if (!this.sphereGame.isActive) {
-        // First time or after full deactivate
+        // First time or after full deactivate - always activate
         this.sphereGame.activate();
       } else {
-        // Coming back from draw mode: resume nicely
-        if (this.sphereGame.resumeFromDrawMode) {
+        // Even if active, ensure proper state when coming from any mode
+        // Check if spheres exist and are visible
+        if (!this.sphereGame.followers || this.sphereGame.followers.length === 0 || 
+            !this.sphereGame.spheresGroup || !this.sphereGame.spheresGroup.visible) {
+          // Force reactivation if spheres are missing or invisible
+          this.sphereGame.finalizeDeactivate();  // Clear current state
+          this.sphereGame.activate();            // Full reactivation
+        } else if (this.sphereGame.resumeFromDrawMode) {
+          // Normal resume from draw mode
           this.sphereGame.resumeFromDrawMode();
         } else {
+          // Fallback: ensure visibility and animation
           if (this.sphereGame.spheresGroup) this.sphereGame.spheresGroup.visible = true;
           this.sphereGame.startAnimation && this.sphereGame.startAnimation();
         }
