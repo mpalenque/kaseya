@@ -44,6 +44,10 @@ class DrawGame {
   this.RING_LFO_PHASE_OFFSET = 360 * Math.PI / 180;      // LFO Phase: 360°
   this.RING_PURPLE_ROTATION_SPEED = 0.1;                 // Purple Rot: 0.1x (slow smooth rotation)
   this.RING_CYAN_ROTATION_SPEED = -0.15;                 // Cyan Rot: -0.15x (opposite direction, slightly faster)
+  // Extra: independent gentle rocking around Z for each ring
+  this.RING_ROCK_Z_AMP = 3 * Math.PI / 180;              // 3 degrees
+  this.RING_ROCK_Z_FREQ_PURPLE = 0.35;                   // Hz
+  this.RING_ROCK_Z_FREQ_CYAN = 0.47;                     // Hz (slightly different)
     
     // Ring animation
     this.ringAnimRAF = 0;
@@ -193,9 +197,10 @@ class DrawGame {
     this.ring3DPurple = new THREE.Mesh(torusGeo.clone(), matP);
     this.ring3DCyan = new THREE.Mesh(torusGeo.clone(), matC);
 
-    // Slightly different radii
-    this.ring3DPurple.scale.setScalar(1.0);
-    this.ring3DCyan.scale.setScalar(1.05);
+  // Slightly different base radii to avoid visual overlap
+  // Purple slightly larger, Cyan slightly smaller so edges don't coincide
+  this.ring3DPurple.scale.setScalar(1.06);
+  this.ring3DCyan.scale.setScalar(0.98);
 
   // Orient the torus so the ring stands vertically (wraps around the head)
   this.ring3DPurple.rotation.x = Math.PI / 2;
@@ -334,15 +339,20 @@ class DrawGame {
 
     // Scale rings to match face tracking exactly
     // Use actual face radius for proportional scaling that follows face size
-    const scaleBase = Math.max(0.35, radius * 1.15);
-    
-    // Apply configurable overall 3D size multiplier
-    this.ring3DPurple.scale.setScalar(scaleBase * this.RING_WIDTH_SCALE * this.RING_SCALE_MULT);
-    this.ring3DCyan.scale.setScalar(scaleBase * (this.RING_WIDTH_SCALE * 1.05) * this.RING_SCALE_MULT);
+  const scaleBase = Math.max(0.35, radius * 1.15);
+
+  // Apply configurable overall 3D size multiplier
+  // Ensure non-overlap by biasing Purple bigger and Cyan smaller
+  const purpleScale = scaleBase * this.RING_WIDTH_SCALE * this.RING_SCALE_MULT * 1.06;
+  const cyanScale = scaleBase * (this.RING_WIDTH_SCALE * 0.96) * this.RING_SCALE_MULT;
+  this.ring3DPurple.scale.setScalar(purpleScale);
+  this.ring3DCyan.scale.setScalar(cyanScale);
 
   // Slightly offset rings in local Z to create parallax depth (one sits a bit further back)
-  this.ring3DPurple.position.set(0, 0, -this.RING_Z_SEPARATION * scaleBase);
-  this.ring3DCyan.position.set(0, 0, this.RING_Z_SEPARATION * scaleBase);
+  // Keep separation and also add slight Y bias to make overlap visually impossible
+  const zSep = this.RING_Z_SEPARATION * scaleBase;
+  this.ring3DPurple.position.set(0, 0.01 * scaleBase, -zSep);
+  this.ring3DCyan.position.set(0, -0.01 * scaleBase, zSep);
 
     this.set3DRingsVisible(true);
   }
@@ -399,7 +409,9 @@ class DrawGame {
             const lfoRot = Math.sin(2 * Math.PI * this.RING_LFO_FREQUENCY * t) * this.RING_LFO_AMPLITUDE;
             // Add individual rotation speed (accumulated over time)
             const individualRot = this.RING_PURPLE_ROTATION_SPEED * 2 * Math.PI * t;
-            this.ring3DPurple.rotation.z = baseP + animRot + lfoRot + individualRot;
+            // Add gentle, independent Z rocking
+            const rockZ = Math.sin(2 * Math.PI * this.RING_ROCK_Z_FREQ_PURPLE * t) * this.RING_ROCK_Z_AMP;
+            this.ring3DPurple.rotation.z = baseP + animRot + lfoRot + individualRot + rockZ;
             this.ring3DPurple.position.y = animBob * 0.5;
           }
 
@@ -412,7 +424,9 @@ class DrawGame {
             const lfoRot = Math.sin(2 * Math.PI * this.RING_LFO_FREQUENCY * t + this.RING_LFO_PHASE_OFFSET) * this.RING_LFO_AMPLITUDE;
             // Add individual rotation speed (accumulated over time)
             const individualRot = this.RING_CYAN_ROTATION_SPEED * 2 * Math.PI * t;
-            this.ring3DCyan.rotation.z = baseC + animRot + this.RING_CYAN_ROT_Z_OFFSET + this.RING_INDIVIDUAL_ROT_OFFSET + lfoRot + individualRot;
+            // Add gentle, independent Z rocking (different frequency for de-phasing)
+            const rockZ = Math.sin(2 * Math.PI * this.RING_ROCK_Z_FREQ_CYAN * t + 0.37) * this.RING_ROCK_Z_AMP;
+            this.ring3DCyan.rotation.z = baseC + animRot + this.RING_CYAN_ROT_Z_OFFSET + this.RING_INDIVIDUAL_ROT_OFFSET + lfoRot + individualRot + rockZ;
             this.ring3DCyan.position.y = animBob * 0.5;
           }
         } catch (e) {

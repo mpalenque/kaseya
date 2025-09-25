@@ -127,41 +127,19 @@ class UIManager {
     // Handle sphere mode
     if (mode === 'spheres') {
       if (!this.sphereGame) return;
-      
-      // Force complete reactivation to ensure spheres always appear
-      if (!this.sphereGame.isActive) {
-        // First time or after full deactivate - always activate
-        this.sphereGame.activate();
-        // Ensure visibility and animation
-        this.sphereGame.ensureVisibleAndRunning && this.sphereGame.ensureVisibleAndRunning();
-      } else {
-        // Even if active, ensure proper state when coming from any mode
-        // Check if spheres exist and are visible
-        if (!this.sphereGame.followers || this.sphereGame.followers.length === 0 || 
-            !this.sphereGame.spheresGroup || !this.sphereGame.spheresGroup.visible) {
-          // Force reactivation if spheres are missing or invisible
-          this.sphereGame.finalizeDeactivate();  // Clear current state
-          this.sphereGame.activate();            // Full reactivation
-          this.sphereGame.ensureVisibleAndRunning && this.sphereGame.ensureVisibleAndRunning();
-        } else if (this.sphereGame.resumeFromDrawMode) {
-          // Normal resume from draw mode
-          this.sphereGame.resumeFromDrawMode();
-          this.sphereGame.ensureVisibleAndRunning && this.sphereGame.ensureVisibleAndRunning();
-        } else {
-          // Fallback: ensure visibility and animation
-          if (this.sphereGame.spheresGroup) this.sphereGame.spheresGroup.visible = true;
-          this.sphereGame.startAnimation && this.sphereGame.startAnimation();
-        }
-      }
+      // Always re-activate and ensure visibility/animation (avoids edge cases after 'none' or preview)
+      try { this.sphereGame.activate(); } catch (e) {}
+      try { this.sphereGame.ensureVisibleAndRunning && this.sphereGame.ensureVisibleAndRunning(); } catch (e) {}
     } else if (this.sphereGame && this.sphereGame.isActive) {
-      // When leaving spheres for draw, just pause to keep resources/warm state
+      // Leaving spheres
       if (mode === 'draw' && this.sphereGame.pauseForDrawMode) {
+        // Pause only for draw (keeps renderer for rings)
         this.sphereGame.pauseForDrawMode();
       } else {
-        // Smoothly exit spheres then deactivate when going to 'none'
-        if (this.sphereGame.exitAndDeactivate) {
-          this.sphereGame.exitAndDeactivate();
-        } else {
+        // For 'none', finalize immediately to avoid race conditions with transitions
+        if (this.sphereGame.finalizeDeactivate) {
+          this.sphereGame.finalizeDeactivate();
+        } else if (this.sphereGame.deactivate) {
           this.sphereGame.deactivate();
         }
       }
