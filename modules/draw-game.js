@@ -60,6 +60,9 @@ class DrawGame {
     // Ring animation
     this.ringAnimRAF = 0;
   this.ringsTunerPanel = null; // UI panel for adjusting ring params
+  // Smoothing buffers for ring group to reduce live-view jitter
+  this._ringPosSmoothed = null;
+  this._ringQuatSmoothed = null;
     
     // Word pool for the roulette
     this.words = [
@@ -270,7 +273,7 @@ class DrawGame {
       upOffset -= radius * 0.25; // Stronger downward adjustment for mobile devices
     }
 
-    // Position rings based on face tracking
+  // Position rings based on face tracking
     if (ft.headOccluderRoot) {
       try {
         const root = ft.headOccluderRoot;
@@ -283,16 +286,18 @@ class DrawGame {
         pos.addScaledVector(forwardWorld, -behindOffset);
         pos.addScaledVector(upWorld, upOffset);
         
-        this.ring3DGroup.position.copy(pos);
+  this.ring3DGroup.position.copy(pos);
         
         // Align the ring group's normal (Z) to forwardWorld so the ring stands vertically around the head
         const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), forwardWorld);
-        this.ring3DGroup.quaternion.copy(q);
+  this.ring3DGroup.quaternion.copy(q);
         // Apply user rotations (X/Y/Z) after alignment
         try {
           const eul = new THREE.Euler(this.RING_ROT_X_RAD, this.RING_ROT_Y_RAD, this.RING_ROT_Z_RAD, 'XYZ');
           const qRot = new THREE.Quaternion().setFromEuler(eul);
           this.ring3DGroup.quaternion.multiply(qRot);
+          // Smooth transform to avoid stutter in live view
+          this._applyRingSmoothing();
         } catch(e) {}
       } catch (e) {
         // fallback to camera-based method below
@@ -314,6 +319,7 @@ class DrawGame {
           const eul = new THREE.Euler(this.RING_ROT_X_RAD, this.RING_ROT_Y_RAD, this.RING_ROT_Z_RAD, 'XYZ');
           const qRot = new THREE.Quaternion().setFromEuler(eul);
           this.ring3DGroup.quaternion.multiply(qRot);
+          this._applyRingSmoothing();
         } catch (e2) {}
       }
     } else {
@@ -324,7 +330,7 @@ class DrawGame {
         const upWorld = ft.camera.up ? ft.camera.up.clone().normalize() : new THREE.Vector3(0,1,0);
         const pos = center.clone().addScaledVector(camDir, behindOffset);
         pos.addScaledVector(upWorld, upOffset);
-        this.ring3DGroup.position.copy(pos);
+  this.ring3DGroup.position.copy(pos);
       } else {
         // Fallback: simple world Z offset
         this.ring3DGroup.position.copy(center);
@@ -336,7 +342,8 @@ class DrawGame {
         this.ring3DGroup.quaternion.set(0, 0, 0, 1);
         const eul = new THREE.Euler(this.RING_ROT_X_RAD, this.RING_ROT_Y_RAD, this.RING_ROT_Z_RAD, 'XYZ');
         const qRot = new THREE.Quaternion().setFromEuler(eul);
-        this.ring3DGroup.quaternion.multiply(qRot);
+  this.ring3DGroup.quaternion.multiply(qRot);
+  this._applyRingSmoothing();
       } catch (e) {}
     }
 
@@ -364,6 +371,23 @@ class DrawGame {
   this.ring3DCyan.position.set(0, -0.01 * scaleBase, zSep);
 
     this.set3DRingsVisible(true);
+  }
+
+  // Low-pass filter ring group transform to reduce micro jitter from head tracking
+  _applyRingSmoothing() {
+    try {
+      const THREE = window.THREE;
+      if (!THREE || !this.ring3DGroup) return;
+      const alpha = 0.25; // smoothing factor (0=no smooth, 1=hard snap)
+      // Position smoothing
+      if (!this._ringPosSmoothed) this._ringPosSmoothed = this.ring3DGroup.position.clone();
+      this._ringPosSmoothed.lerp(this.ring3DGroup.position, alpha);
+      this.ring3DGroup.position.copy(this._ringPosSmoothed);
+      // Rotation smoothing
+      if (!this._ringQuatSmoothed) this._ringQuatSmoothed = this.ring3DGroup.quaternion.clone();
+      this._ringQuatSmoothed.slerp(this.ring3DGroup.quaternion, alpha);
+      this.ring3DGroup.quaternion.copy(this._ringQuatSmoothed);
+    } catch(e) {}
   }
 
   startRingAnimation() {

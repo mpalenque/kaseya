@@ -141,6 +141,8 @@ class KaseyaApp {
         if (this.sphereGame && this.sphereGame.spheresGroup) {
           this.sphereGame.spheresGroup.visible = false;
         }
+        // Update ring positions every frame before rendering to avoid jitter
+        try { this.drawGame && this.drawGame.update3DRingsPosition(); } catch(e) {}
         this.faceTracker.renderer.render(this.faceTracker.scene, this.faceTracker.camera);
       }
       return;
