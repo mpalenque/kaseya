@@ -307,7 +307,7 @@ class SphereGame {
         phi: Math.acos(y / Math.sqrt(x*x + y*y + z*z)), 
         dTheta: this.rand(-0.15, 0.15) * 0.25, 
         dPhi: this.rand(-0.15, 0.15) * 0.25, 
-        followLerp: this.rand(0.02, 0.06), 
+        followLerp: this.rand(0.01, 0.03), // Much smoother movement 
         zMul: this.rand(1.3, 2.2), 
         zBias: -this.rand(0.3, 1.0) 
       };
@@ -464,7 +464,7 @@ class SphereGame {
       
       this.tmp.set(ox, oy, oz).add(headPosSmoothed);
       
-      // Collision avoidance with face
+      // Collision avoidance with face - improved smoothness
       const dxh = this.tmp.x - faceColliderCenter.x; 
       const dyh = this.tmp.y - faceColliderCenter.y; 
       const dzh = this.tmp.z - faceColliderCenter.z; 
@@ -474,7 +474,10 @@ class SphereGame {
       if (distHeadSq > 0.0001) { 
         const distHead = Math.sqrt(distHeadSq); 
         if (distHead < minHeadDist) { 
-          const scale = (minHeadDist - distHead) / distHead; 
+          const overlap = minHeadDist - distHead;
+          const pushStrength = Math.min(overlap / minHeadDist, 1.0); // Normalize push strength
+          const smoothFactor = 0.3; // Gentle push factor
+          const scale = pushStrength * smoothFactor / distHead;
           this.tmp.x += dxh * scale; 
           this.tmp.y += dyh * scale; 
           this.tmp.z += dzh * scale; 
@@ -490,8 +493,8 @@ class SphereGame {
       sphere.position.lerp(this.tmp, orbit.followLerp);
     }
 
-    // Inter-sphere collision resolution
-    for (let iter = 0; iter < 3; iter++) {
+    // Inter-sphere collision resolution - improved for smooth movement
+    for (let iter = 0; iter < 5; iter++) { // More iterations for smoother resolution
       for (let i = 0; i < this.followers.length; i++) {
         const sphereA = this.followers[i]; 
         const radiusA = sphereA.userData.radius;
@@ -504,7 +507,7 @@ class SphereGame {
           const dy = sphereB.position.y - sphereA.position.y; 
           const dz = sphereB.position.z - sphereA.position.z; 
           const distSq = dx*dx + dy*dy + dz*dz; 
-          const minDist = radiusA + radiusB + 0.01; 
+          const minDist = radiusA + radiusB + 0.02; // Slightly more padding
           
           if (distSq > 0) { 
             const dist = Math.sqrt(distSq); 
@@ -513,9 +516,11 @@ class SphereGame {
               const nx = dx / dist; 
               const ny = dy / dist; 
               const nz = dz / dist; 
-              const stiffness = 0.5; 
-              const factor = stiffness * (1.0 - iter * 0.25); 
-              const push = overlap * 0.5 * Math.max(0.1, factor); 
+              
+              // Much softer stiffness with gradual reduction
+              const baseStiffness = 0.15; // Much softer base stiffness
+              const factor = baseStiffness * (1.0 - iter * 0.15); // More gradual reduction
+              const push = overlap * 0.5 * Math.max(0.05, factor); 
               
               const pushAx = -nx * push; 
               const pushAy = -ny * push; 
@@ -524,13 +529,14 @@ class SphereGame {
               const pushBy = ny * push; 
               const pushBz = nz * push; 
               
-              // Linear interpolation without THREE.js dependency
-              sphereA.position.x += (sphereA.position.x + pushAx - sphereA.position.x) * 0.7; 
-              sphereA.position.y += (sphereA.position.y + pushAy - sphereA.position.y) * 0.7; 
-              sphereA.position.z += (sphereA.position.z + pushAz - sphereA.position.z) * 0.7; 
-              sphereB.position.x += (sphereB.position.x + pushBx - sphereB.position.x) * 0.7; 
-              sphereB.position.y += (sphereB.position.y + pushBy - sphereB.position.y) * 0.7; 
-              sphereB.position.z += (sphereB.position.z + pushBz - sphereB.position.z) * 0.7; 
+              // Corrected smooth interpolation with damping
+              const damping = 0.3; // Much gentler movement
+              sphereA.position.x += pushAx * damping; 
+              sphereA.position.y += pushAy * damping; 
+              sphereA.position.z += pushAz * damping; 
+              sphereB.position.x += pushBx * damping; 
+              sphereB.position.y += pushBy * damping; 
+              sphereB.position.z += pushBz * damping; 
               
               // Face plane constraint
               const faceZ = headPosSmoothed.z + this.facePlaneMargin; 
