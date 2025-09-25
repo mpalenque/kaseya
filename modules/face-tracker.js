@@ -325,7 +325,7 @@ class FaceTracker {
     // iPhone-specific Y offset correction for better occlusion alignment
     const isIPhone = /iPhone/i.test(navigator.userAgent);
     if (isIPhone) {
-      yFinal += 0.15; // Adjust Y position downward for iPhone (positive moves down in NDC)
+      yFinal += 0.25; // Stronger adjustment Y position downward for iPhone (positive moves down in NDC)
     }
     
     return { x: xFinal, y: yFinal };

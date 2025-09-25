@@ -291,6 +291,13 @@ class SphereGame {
       });
       
       const mesh = new THREE.Mesh(geometry, material);
+      
+      // iPhone-specific position correction: spheres appear too high
+      const isIPhone = /iPhone/i.test(navigator.userAgent);
+      if (isIPhone) {
+        y -= 0.5; // Move spheres down on iPhone
+      }
+      
       mesh.position.set(x, y, z);
       
       // Orbital behavior data

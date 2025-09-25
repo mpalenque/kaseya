@@ -249,6 +249,12 @@ class DrawGame {
     // Use a scaling that makes the offset meaningful but still proportional to face size
     const pixelToWorldScale = radius * 0.5; // MUCH stronger scaling for dramatic offset control
     upOffset += (this.RING_UP_EXTRA_PX || 0) * pixelToWorldScale;
+    
+    // iPhone-specific correction: rings appear 15% too high, adjust downward
+    const isIPhone = /iPhone/i.test(navigator.userAgent);
+    if (isIPhone) {
+      upOffset -= radius * 0.15; // Move rings down 15% of face radius on iPhone
+    }
 
     // Position rings based on face tracking
     if (ft.headOccluderRoot) {
