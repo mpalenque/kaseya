@@ -342,22 +342,19 @@ class VideoCapture {
     const bannerH = rect.height * scaleY;
     const radius = 30 * Math.min(scaleX, scaleY);
     
-    // Gradient background
-    const bgGradient = ctx.createLinearGradient(bannerX, bannerY, bannerX + bannerW, bannerY + bannerH);
-    bgGradient.addColorStop(0, 'rgba(138,43,226,0.95)');
-    bgGradient.addColorStop(1, 'rgba(75,0,130,0.95)');
-    ctx.fillStyle = bgGradient;
+  // Solid background to match live banner
+  ctx.fillStyle = '#2A127F';
     ctx.beginPath();
     this.roundRectPath(ctx, bannerX, bannerY, bannerW, bannerH, radius);
     ctx.fill();
-    ctx.lineWidth = 3 * Math.min(scaleX, scaleY);
-    ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+  ctx.lineWidth = 3 * Math.min(scaleX, scaleY);
+  ctx.strokeStyle = '#A44BFF';
     ctx.stroke();
     
     // Text
     const computed = window.getComputedStyle(inner || this.drawGame.permanentWordElement);
     const fontSize = parseInt(computed.fontSize) * Math.min(scaleX, scaleY);
-    ctx.font = `bold ${fontSize}px -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif`;
+  ctx.font = `bold ${fontSize}px 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`;
     ctx.fillStyle = '#fff';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';

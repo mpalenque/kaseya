@@ -18,7 +18,7 @@ html, body, #app, video, canvas, button, .word-text, .preview-label, #preview-co
 img { -webkit-user-drag: none; }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background: #000;
   overflow: hidden;
   position: relative;
@@ -660,7 +660,7 @@ body {
 }
 
 .word-text {
-  background: linear-gradient(135deg, rgba(138, 43, 226, 0.95), rgba(75, 0, 130, 0.95));
+  background: #2A127F;
   color: white;
   width: 360px; /* increased from 320px */
   height: 120px; /* increased from 100px */
@@ -668,7 +668,7 @@ body {
   border-radius: 30px;
   font-weight: 700;
   text-align: center;
-  border: 3px solid rgba(255,255,255,0.8);
+  border: 3px solid #A44BFF;
   box-shadow: 0 10px 30px rgba(138, 43, 226, 0.3), 0 0 20px rgba(138, 43, 226, 0.2), inset 0 1px 0 rgba(255,255,255,0.3);
   backdrop-filter: blur(10px);
   letter-spacing: 1px;
@@ -688,6 +688,7 @@ body {
   height: 100%;
   line-height: 1.15;
   font-size: clamp(16px, 3.5vw, 28px); /* increased further from clamp(12px, 2.8vw, 24px) */
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-weight: 800;
   word-break: break-word;
   overflow: hidden;
@@ -700,10 +701,10 @@ body {
 
 .word-text.spinning {
   animation: word-glow 0.4s ease-in-out infinite alternate;
-  background: linear-gradient(45deg, #8A2BE2, #4B0082, #6A5ACD, #9370DB, #8A2BE2);
+  background: #2A127F;
   background-size: 400% 400%;
-  animation: word-glow 0.4s ease-in-out infinite alternate, gradient-flow 0.4s ease-in-out infinite;
-  border-color: rgba(255,255,255,0.9);
+  animation: word-glow 0.4s ease-in-out infinite alternate; /* keep glow only */
+  border-color: #A44BFF;
   box-shadow: 
     0 10px 30px rgba(138, 43, 226, 0.4),
     0 0 40px rgba(138, 43, 226, 0.3),

@@ -13,7 +13,7 @@ class SphereGame {
     this.clock = null;
     
     // Sphere system
-    this.followerCount = 120; // Reduced for better performance
+  this.followerCount = 22; // Exact total spheres required
     this.followers = [];
   this.sphereColliders = [];
   // Increase initial exclusion so spheres don't spawn too close to the face
@@ -370,33 +370,36 @@ class SphereGame {
     
     let successfulPlacements = 0;
     
-    for (let i = 0; i < this.followerCount && successfulPlacements < this.followerCount; i++) {
+    // Keep trying placements until we reach the requested count (with a safe cap)
+    let attempts = 0;
+    const maxAttempts = this.followerCount * 20;
+    while (successfulPlacements < this.followerCount && attempts < maxAttempts) {
+      attempts++;
       let radius, zone, position;
-      
       // Distribution similar to original
       const distribution = Math.random();
-      if (distribution < 0.4) { 
-        zone = 'behind'; 
-        radius = this.rand(0.06, 0.15); 
-      } else if (distribution < 0.65) { 
-        zone = 'sides'; 
-        radius = this.rand(0.12, 0.25); 
-      } else if (distribution < 0.85) { 
-        zone = 'front-corners'; 
-        radius = this.rand(0.18, 0.32); 
-      } else { 
-        zone = 'top'; 
-        radius = this.rand(0.15, 0.28); 
+      if (distribution < 0.4) {
+        zone = 'behind';
+        radius = this.rand(0.06, 0.15);
+      } else if (distribution < 0.65) {
+        zone = 'sides';
+        radius = this.rand(0.12, 0.25);
+      } else if (distribution < 0.85) {
+        zone = 'front-corners';
+        radius = this.rand(0.18, 0.32);
+      } else {
+        zone = 'top';
+        radius = this.rand(0.15, 0.28);
       }
 
       position = this.findValidPosition(radius, zone);
-      if (!position.success) { 
-        radius *= 0.7; 
-        position = this.findValidPosition(radius, zone); 
+      if (!position.success) {
+        radius *= 0.7;
+        position = this.findValidPosition(radius, zone);
       }
-      if (!position.success) { 
-        radius *= 0.7; 
-        position = this.findValidPosition(radius, zone); 
+      if (!position.success) {
+        radius *= 0.7;
+        position = this.findValidPosition(radius, zone);
       }
       if (!position.success) continue;
 
@@ -445,7 +448,7 @@ class SphereGame {
       mesh.userData.radius = radius; 
       mesh.renderOrder = 1; 
       
-  this.followers.push(mesh); 
+  this.followers.push(mesh);
   if (this.spheresGroup) this.spheresGroup.add(mesh); else this.scene.add(mesh);
       successfulPlacements++;
     }

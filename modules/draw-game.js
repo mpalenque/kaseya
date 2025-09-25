@@ -488,7 +488,7 @@ class DrawGame {
     panel.style.cssText = `
       position: fixed; top: 8px; left: 8px; z-index: 1000;
       background: rgba(0,0,0,0.55); color: #fff; padding: 8px 10px; border-radius: 8px;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
       font-size: 12px; line-height: 1.2; backdrop-filter: blur(6px);
       display: none;
     `;
