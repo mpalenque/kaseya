@@ -247,7 +247,7 @@ class DrawGame {
     
     // Add extra vertical offset that scales appropriately with face tracking
     // Use a scaling that makes the offset meaningful but still proportional to face size
-    const pixelToWorldScale = radius * 0.04; // 10x stronger scaling for more visible offset control
+    const pixelToWorldScale = radius * 0.5; // MUCH stronger scaling for dramatic offset control
     upOffset += (this.RING_UP_EXTRA_PX || 0) * pixelToWorldScale;
 
     // Position rings based on face tracking
