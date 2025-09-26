@@ -30,6 +30,7 @@ class SphereGame {
     this.configPanel = null;
     this.sphereConfigs = null; // Will hold custom positions/sizes
     this.defaultConfig = true; // Whether to use default or custom positions
+  this.configLoaded = false; // Marks when config load finished (for static hosting gating)
     
     // Animation
     this.renderRAF = 0;
@@ -370,6 +371,25 @@ class SphereGame {
       return;
     }
     
+    // On GitHub Pages (or when forceServer is set), wait for config to load to avoid showing the default grid
+    try {
+      const isGitHubPages = window.location.hostname.includes('github.io') || 
+                            window.location.hostname.includes('githubusercontent.com');
+      const forceServerLoad = new URLSearchParams(window.location.search).has('forceServer') || isGitHubPages;
+      if (forceServerLoad && !this.configLoaded) {
+        console.log('[SphereGame] ⏳ Waiting for config to load before creating spheres (static hosting)');
+        if (this.configPromise && typeof this.configPromise.then === 'function') {
+          this.configPromise.then(() => {
+            if (this.isActive) {
+              console.log('[SphereGame] ✅ Config loaded; creating spheres now');
+              this.createSpheres();
+            }
+          });
+        }
+        return;
+      }
+    } catch (_) {}
+
     console.log('[SphereGame] Creating spheres - defaultConfig:', this.defaultConfig, 'hasConfig:', !!this.sphereConfigs);
     
     this.clearSpheres();
@@ -864,8 +884,9 @@ class SphereGame {
 
   // Configuration System
   async setupConfigSystem() {
-    // Load existing config on startup
-    await this.loadSphereConfig();
+    // Kick off config load and keep a handle to the promise
+    this.configPromise = this.loadSphereConfig();
+    await this.configPromise;
     
     // Setup Ctrl+S hotkey
     document.addEventListener('keydown', (e) => {
@@ -901,6 +922,9 @@ class SphereGame {
             if (this.sphereConfigs.spheres && this.sphereConfigs.spheres.length > 0) {
               this.defaultConfig = false;
               console.log('[SphereGame] ✅ Loaded from localStorage:', this.sphereConfigs.spheres.length, 'spheres');
+              // Apply immediately if active
+              this.applyConfigIfActive();
+              this.configLoaded = true;
               return;
             }
           } catch (e) {
@@ -940,6 +964,9 @@ class SphereGame {
           
           console.log('[SphereGame] ✅ Loaded from server:', serverConfig.spheres.length, 'spheres');
           console.log('[SphereGame] First sphere position:', serverConfig.spheres[0]?.position);
+          // Apply immediately if active
+          this.applyConfigIfActive();
+          this.configLoaded = true;
           return;
         } else {
           console.warn('[SphereGame] Server config invalid - no spheres array or empty');
@@ -952,11 +979,25 @@ class SphereGame {
       console.log('[SphereGame] ⚠️ No valid sphere config found, using embedded default config');
       this.sphereConfigs = this.getEmbeddedConfig();
       this.defaultConfig = false;
+      this.applyConfigIfActive();
+      this.configLoaded = true;
     } catch (e) {
       console.error('[SphereGame] Error loading sphere config:', e);
       console.log('[SphereGame] ⚠️ Using embedded config due to error');
       this.sphereConfigs = this.getEmbeddedConfig();
       this.defaultConfig = false;
+      this.applyConfigIfActive();
+      this.configLoaded = true;
+    }
+  }
+
+  // If the game is active, recreate spheres from the latest loaded config
+  applyConfigIfActive() {
+    if (this.isActive) {
+      console.log('[SphereGame] Applying loaded config to active scene');
+      this.clearSpheres();
+      this.createSpheres();
+      this.updateConfigPanelValues?.();
     }
   }
 
