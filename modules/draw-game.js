@@ -32,8 +32,8 @@ class DrawGame {
   this.RING_ROT_X_RAD = 25 * Math.PI / 180;  // Rot X: 25°
   this.RING_ROT_Y_RAD = 0.0;                  // Rot Y: 0°
   this.RING_ROT_Z_RAD = 0.0;                  // Rot Z: 0°
-  this.RING_UP_OFFSET_FACTOR = 1.2;           // Base Height: 120% (altura de la frente)
-  this.RING_UP_EXTRA_PX = 200;                // Extra Height: 200px (ajustado para frente)
+  this.RING_UP_OFFSET_FACTOR = 2.2;           // Base Height: 220% (mucho más alto para frente)
+  this.RING_UP_EXTRA_PX = 450;                // Extra Height: 450px (aumentado significativamente)
   this.RING_LOCAL_Y_OFFSET_FACTOR = 0.0;     // extra vertical offset in units of face radius (applied along local Y)
   this.RING_BEHIND_OFFSET_FACTOR = 0.80;     // Depth: 80%
   this.RING_Z_SEPARATION = 0.35;             // Z Separation: 35% (more separation)
@@ -293,7 +293,7 @@ class DrawGame {
 
     // Restricción adicional: los anillos nunca deben quedar más arriba que el cartel del texto
     // Limitar upOffset para que los anillos queden a la altura de la frente, por debajo del texto banner
-    const maxUpOffset = radius * 1.3; // Máximo 130% del radio de la cara hacia arriba (altura de frente)
+    const maxUpOffset = radius * 2.5; // Máximo 250% del radio de la cara hacia arriba (mucho más alto)
     upOffset = Math.min(upOffset, maxUpOffset);
 
   // Position rings based on face tracking
