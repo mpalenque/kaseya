@@ -235,9 +235,9 @@ class DrawGame {
     };
 
     // Crear los anillos con colores similares a refearing.ts
-    // Grosor reducido al 10% (0.03 * 0.1 = 0.003) y con inclinaciones como en refearing.ts
-    this.ring3DPurple = createGlowingRing(1.0, 0.003, 0xcc66ff, 'purple-ring', Math.PI / 2.2); // Magenta
-    this.ring3DCyan = createGlowingRing(1.02, 0.003, 0x66ccff, 'cyan-ring', Math.PI / 2.5);     // Azul cian
+    // Grosor aumentado 15% más (0.003 * 1.15 = 0.00345) y con inclinaciones como en refearing.ts
+    this.ring3DPurple = createGlowingRing(1.0, 0.00345, 0xcc66ff, 'purple-ring', Math.PI / 2.2); // Magenta
+    this.ring3DCyan = createGlowingRing(1.02, 0.00345, 0x66ccff, 'cyan-ring', Math.PI / 2.5);     // Azul cian
 
     // Render order: keep them after occluder (occluder uses renderOrder -1/0), so set > 0
     this.ring3DPurple.children.forEach(mesh => mesh.renderOrder = 1);
@@ -309,6 +309,10 @@ class DrawGame {
         pos.addScaledVector(forwardWorld, -behindOffset);
         pos.addScaledVector(upWorld, upOffset);
         
+        // Añadir 60% más altura directamente para subir los anillos a la frente
+        const additionalHeight = radius * 0.6; // 60% más arriba (30% adicional)
+        pos.addScaledVector(upWorld, additionalHeight);
+        
   this.ring3DGroup.position.copy(pos);
         
         // Align the ring group's normal (Z) to forwardWorld so the ring stands vertically around the head
@@ -353,11 +357,21 @@ class DrawGame {
         const upWorld = ft.camera.up ? ft.camera.up.clone().normalize() : new THREE.Vector3(0,1,0);
         const pos = center.clone().addScaledVector(camDir, behindOffset);
         pos.addScaledVector(upWorld, upOffset);
+        
+        // Añadir 60% más altura directamente para subir los anillos a la frente
+        const additionalHeight = radius * 0.6; // 60% más arriba (30% adicional)
+        pos.addScaledVector(upWorld, additionalHeight);
+        
   this.ring3DGroup.position.copy(pos);
       } else {
         // Fallback: simple world Z offset
         this.ring3DGroup.position.copy(center);
         this.ring3DGroup.position.addScaledVector(new THREE.Vector3(0,1,0), upOffset);
+        
+        // Añadir 60% más altura directamente para subir los anillos a la frente
+        const additionalHeight = radius * 0.6; // 60% más arriba (30% adicional)
+        this.ring3DGroup.position.addScaledVector(new THREE.Vector3(0,1,0), additionalHeight);
+        
         this.ring3DGroup.position.z += behindOffset;
       }
       // Apply user rotations even without occluder alignment
@@ -485,8 +499,8 @@ class DrawGame {
               ring.rotation.z = t * 0.575; // 0.5 * 1.15
             });
             
-            // Movimiento vertical suave (subir y bajar) - 15% más rápido
-            this.ring3DPurple.position.y = Math.sin(t * 0.805) * 0.08; // 0.7 * 1.15
+            // Movimiento vertical suave (subir y bajar) - 15% más rápido + altura base para frente
+            this.ring3DPurple.position.y = 0.8 + Math.sin(t * 0.805) * 0.08; // Base alta + oscilación
           }
 
           if (this.ring3DCyan) {
@@ -498,8 +512,8 @@ class DrawGame {
               ring.rotation.z = t * 0.46; // 0.4 * 1.15
             });
             
-            // Movimiento vertical desfasado usando cos - 15% más rápido
-            this.ring3DCyan.position.y = Math.cos(t * 0.575) * 0.08; // 0.5 * 1.15
+            // Movimiento vertical desfasado usando cos - 15% más rápido + altura base para frente
+            this.ring3DCyan.position.y = 0.8 + Math.cos(t * 0.575) * 0.08; // Base alta + oscilación
           }
         } catch (e) {
           // swallow animation errors
