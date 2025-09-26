@@ -97,17 +97,20 @@ class KaseyaApp {
     await this.faceTracker.init(this.webcamEl);
     this.faceTracker.startDetection();
     
-    // Initialize Sphere Game
-    this.sphereGame = new SphereGame();
-    this.sphereGame.init(this.faceTracker);
-    
     // Initialize Draw Game
     this.drawGame = new DrawGame();
     this.drawGame.init(this.faceTracker);
     
   // Initialize Video Capture
   this.videoCapture = new VideoCapture();
-  await this.videoCapture.init(this.webcamEl, this.drawGame, this.sphereGame, this.faceTracker);
+  await this.videoCapture.init(this.webcamEl, this.drawGame, null, this.faceTracker);
+    
+    // Initialize Sphere Game (after videoCapture so we can pass it)
+    this.sphereGame = new SphereGame();
+    this.sphereGame.init(this.faceTracker, this.videoCapture);
+    
+    // Connect sphereGame to videoCapture
+    this.videoCapture.sphereGame = this.sphereGame;
     
     // Initialize UI Manager
     this.uiManager = new UIManager();

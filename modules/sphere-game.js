@@ -26,6 +26,11 @@ class SphereGame {
   this.faceColliderExtraMargin = 0.06; // absolute extra margin (world units)
     this.tmp = null;
     
+    // Configuration system
+    this.configPanel = null;
+    this.sphereConfigs = null; // Will hold custom positions/sizes
+    this.defaultConfig = true; // Whether to use default or custom positions
+    
     // Animation
     this.renderRAF = 0;
   this.transition = { active: false, mode: null, start: 0, duration: 600, from: { opacity: 1, z: 0 }, to: { opacity: 1, z: 0 } };
@@ -38,10 +43,13 @@ class SphereGame {
     this.spheresGroup = null;
   }
 
-  init(faceTracker) {
+  init(faceTracker, videoCapture = null) {
     this.faceTracker = faceTracker;
+    this.videoCapture = videoCapture;
     this.createSphereContainer();
     this.setup3DScene();
+    this.setupConfigSystem();
+    this.setupPhotoCapture();
   }
 
   createSphereContainer() {
@@ -225,6 +233,7 @@ class SphereGame {
     this.isActive = true;
     document.body.classList.add('sphere-mode');
     this.sphereContainer.style.display = 'block';
+    this.sphereContainer.style.pointerEvents = 'auto'; // Enable clicks for photo capture
     // Make sure renderer is ready (recover if WebGL context was lost)
     this.ensureRendererReady();
     
@@ -284,6 +293,7 @@ class SphereGame {
     this.isActive = false;
     document.body.classList.remove('sphere-mode');
     this.sphereContainer.style.display = 'none';
+    this.sphereContainer.style.pointerEvents = 'none'; // Disable clicks
     this.clearSpheres();
     this.stopAnimation();
     this.currentOpacity = 1;
@@ -362,12 +372,48 @@ class SphereGame {
     
     this.clearSpheres();
     
+    // Check if we should use custom config or generate defaults
+    if (!this.defaultConfig && this.sphereConfigs && this.sphereConfigs.spheres) {
+      this.createSpheresFromConfig();
+      return;
+    }
+    
+    // Default sphere generation (original logic)
     // Color palette matching the original design
     const DOT_COLORS = [
       '#00FFFF', '#C77DFF', '#3D348B', '#7209B7', '#5E2EA7', 
       '#A45CFF', '#36E5FF', '#8A2BE2', '#B794F4'
     ];
     
+    // Create color distribution array to ensure equal color distribution
+    const createColorDistribution = (totalSpheres, colors) => {
+      const distribution = [];
+      const colorsPerSphere = Math.floor(totalSpheres / colors.length);
+      const remainder = totalSpheres % colors.length;
+      
+      // Add equal amounts of each color
+      for (let i = 0; i < colors.length; i++) {
+        for (let j = 0; j < colorsPerSphere; j++) {
+          distribution.push(colors[i]);
+        }
+      }
+      
+      // Add remaining colors from the beginning of the array
+      for (let i = 0; i < remainder; i++) {
+        distribution.push(colors[i]);
+      }
+      
+      // Shuffle the distribution array
+      for (let i = distribution.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [distribution[i], distribution[j]] = [distribution[j], distribution[i]];
+      }
+      
+      return distribution;
+    };
+    
+    const colorDistribution = createColorDistribution(this.followerCount, DOT_COLORS);
+    let colorIndex = 0;
     let successfulPlacements = 0;
     
     // Keep trying placements until we reach the requested count (with a safe cap)
@@ -415,7 +461,8 @@ class SphereGame {
       
       // Create sphere geometry and material
       const geometry = new THREE.SphereGeometry(radius, 24, 24);
-      const colorHex = DOT_COLORS[Math.floor(Math.random() * DOT_COLORS.length)];
+      const colorHex = colorDistribution[colorIndex % colorDistribution.length];
+      colorIndex++;
       const color = new THREE.Color(colorHex);
   // Increase emissive intensity by ~20%
   const emissiveColor = new THREE.Color(colorHex).multiplyScalar(0.48);
@@ -445,7 +492,8 @@ class SphereGame {
       };
       
       mesh.userData.orbit = orbit; 
-      mesh.userData.radius = radius; 
+      mesh.userData.radius = radius;
+      mesh.userData.basePosition = { x, y, z }; // Store original base position
       mesh.renderOrder = 1; 
       
   this.followers.push(mesh);
@@ -585,16 +633,30 @@ class SphereGame {
     // Update sphere positions with orbital motion
     for (const sphere of this.followers) {
       const orbit = sphere.userData.orbit; 
+      const basePos = sphere.userData.basePosition;
+      
       orbit.theta += orbit.dTheta * dt; 
       orbit.phi += orbit.dPhi * dt; 
       
-      const r = orbit.baseRadius;
+      // Use smaller orbital radius for more subtle movement around configured positions
+      const r = Math.min(orbit.baseRadius * 0.15, 0.08); // Reduce orbital motion significantly
       const ox = r * Math.sin(orbit.phi) * Math.cos(orbit.theta); 
       const oy = r * Math.cos(orbit.phi); 
       let oz = r * Math.sin(orbit.phi) * Math.sin(orbit.theta);
       oz = oz * orbit.zMul + orbit.zBias; 
       
-      this.tmp.set(ox, oy, oz).add(headPosSmoothed);
+      // Calculate target position: base position + head offset + small orbital motion
+      if (basePos) {
+        // Use configured base position with head tracking offset and subtle orbital motion
+        this.tmp.set(
+          basePos.x + headPosSmoothed.x * 0.3 + ox, 
+          basePos.y + headPosSmoothed.y * 0.3 + oy, 
+          basePos.z + headPosSmoothed.z * 0.2 + oz
+        );
+      } else {
+        // Fallback to original behavior if no base position configured
+        this.tmp.set(ox, oy, oz).add(headPosSmoothed);
+      }
       
       // Collision avoidance with face - improved smoothness
       const dxh = this.tmp.x - faceColliderCenter.x; 
@@ -616,11 +678,8 @@ class SphereGame {
         } 
       }
       
-      // Face plane constraint
-      const sideAllowance = Math.abs(ox) > r * 0.6; 
-      if (!sideAllowance && this.tmp.z > headPosSmoothed.z + this.facePlaneMargin) { 
-        this.tmp.z = headPosSmoothed.z + this.facePlaneMargin; 
-      }
+      // Face plane constraint - removed to allow spheres to move further forward
+      // Spheres can now move freely in Z direction based on slider configuration
       
       // Make following speed time-based and slightly faster on mobile
       let alpha = orbit.followLerp;
@@ -678,10 +737,10 @@ class SphereGame {
               sphereB.position.y += pushBy * damping; 
               sphereB.position.z += pushBz * damping; 
               
-              // Face plane constraint
-              const faceZ = headPosSmoothed.z + this.facePlaneMargin; 
-              if (sphereA.position.z > faceZ) sphereA.position.z = faceZ; 
-              if (sphereB.position.z > faceZ) sphereB.position.z = faceZ; 
+              // Face plane constraint - removed to allow spheres to move further forward
+              // const faceZ = headPosSmoothed.z + this.facePlaneMargin; 
+              // if (sphereA.position.z > faceZ) sphereA.position.z = faceZ; 
+              // if (sphereB.position.z > faceZ) sphereB.position.z = faceZ; 
             } 
           }
         }
@@ -689,7 +748,7 @@ class SphereGame {
     }
 
     // Final enforcement: ensure spheres are outside the face occluder radius with added margin
-    const faceZ = headPosSmoothed.z + this.facePlaneMargin;
+    // const faceZ = headPosSmoothed.z + this.facePlaneMargin; // Removed to allow forward movement
     for (const sphere of this.followers) {
       const dx = sphere.position.x - faceColliderCenter.x;
       const dy = sphere.position.y - faceColliderCenter.y;
@@ -710,8 +769,8 @@ class SphereGame {
         sphere.position.y = sphere.position.y + (targetY - sphere.position.y) * k;
         sphere.position.z = sphere.position.z + (targetZ - sphere.position.z) * k;
       }
-      // Keep in front of face plane
-      if (sphere.position.z > faceZ) sphere.position.z = faceZ;
+      // Keep in front of face plane - removed to allow spheres to move further forward
+      // if (sphere.position.z > faceZ) sphere.position.z = faceZ;
     }
   }
 
@@ -793,6 +852,485 @@ class SphereGame {
     if (this.sphereContainer && this.sphereContainer.parentNode) {
       this.sphereContainer.parentNode.removeChild(this.sphereContainer);
     }
+    if (this.configPanel && this.configPanel.parentNode) {
+      this.configPanel.parentNode.removeChild(this.configPanel);
+    }
+  }
+
+  // Configuration System
+  setupConfigSystem() {
+    // Load existing config on startup
+    this.loadSphereConfig();
+    
+    // Setup Ctrl+S hotkey
+    document.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && e.key === 's' && this.isActive) {
+        e.preventDefault();
+        this.toggleConfigPanel();
+      }
+    });
+  }
+
+  async loadSphereConfig() {
+    try {
+      // Try to load from localStorage first (for immediate use)
+      const localConfig = localStorage.getItem('sphereConfig');
+      if (localConfig) {
+        this.sphereConfigs = JSON.parse(localConfig);
+        this.defaultConfig = false;
+        return;
+      }
+
+      // Try to fetch from server
+      const response = await fetch('sphere-config.json');
+      if (response.ok) {
+        this.sphereConfigs = await response.json();
+        this.defaultConfig = false;
+        // Cache in localStorage
+        localStorage.setItem('sphereConfig', JSON.stringify(this.sphereConfigs));
+      } else {
+        this.defaultConfig = true;
+        this.sphereConfigs = null;
+      }
+    } catch (e) {
+      console.log('No sphere config found, using defaults');
+      this.defaultConfig = true;
+      this.sphereConfigs = null;
+    }
+  }
+
+  async saveSphereConfig() {
+    if (!this.sphereConfigs) return;
+
+    try {
+      // Save to localStorage immediately
+      localStorage.setItem('sphereConfig', JSON.stringify(this.sphereConfigs));
+      
+      // Try to save to server (POST to save endpoint)
+      const response = await fetch('save-sphere-config', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(this.sphereConfigs)
+      });
+      
+      if (!response.ok) {
+        console.warn('Failed to save config to server, saved locally');
+      }
+    } catch (e) {
+      console.warn('Failed to save config:', e);
+    }
+  }
+
+  toggleConfigPanel() {
+    if (this.configPanel && this.configPanel.style.display !== 'none') {
+      this.hideConfigPanel();
+    } else {
+      this.showConfigPanel();
+    }
+  }
+
+  showConfigPanel() {
+    if (!this.configPanel) {
+      this.createConfigPanel();
+    }
+    
+    // Capture current sphere positions as starting config
+    this.captureCurrentPositions();
+    this.updateConfigPanelValues();
+    this.configPanel.style.display = 'block';
+  }
+
+  hideConfigPanel() {
+    if (this.configPanel) {
+      this.configPanel.style.display = 'none';
+    }
+  }
+
+  createConfigPanel() {
+    this.configPanel = document.createElement('div');
+    this.configPanel.style.cssText = `
+      position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 380px; max-height: 85vh;
+      background: rgba(0,0,0,0.1); color: white; padding: 12px; border-radius: 8px;
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 12px; line-height: 1.2; 
+      border: 1px solid rgba(255,255,255,0.4); z-index: 2000; display: none;
+      overflow-y: auto; box-shadow: none;
+      user-select: none; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none;
+      -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
+    `;
+
+    const headerHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.5); padding-bottom: 6px;">
+        <h3 style="margin: 0; color: #A44BFF; font-size: 13px; font-weight: 800; text-shadow: 0 2px 4px rgba(0,0,0,1);">Spheres</h3>
+        <button id="close-config" style="background: none; border: none; color: white; font-size: 16px; cursor: pointer; padding: 4px; text-shadow: 0 2px 4px rgba(0,0,0,1);">✕</button>
+      </div>
+      <div style="margin-bottom: 8px; text-align: center;">
+        <button id="capture-positions" style="background: rgba(42,18,127,0.7); color: white; border: 1px solid #A44BFF; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 10px; margin: 0 4px; text-shadow: 0 1px 3px rgba(0,0,0,1);">Capture</button>
+        <button id="reset-default" style="background: rgba(68,68,68,0.7); color: white; border: 1px solid #999; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 10px; margin: 0 4px; text-shadow: 0 1px 3px rgba(0,0,0,1);">Reset</button>
+        <button id="save-config" style="background: rgba(10,107,71,0.7); color: white; border: 1px solid #0F7B52; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 10px; margin: 0 4px; text-shadow: 0 1px 3px rgba(0,0,0,1);">Save</button>
+      </div>
+      <div id="spheres-list" style="max-height: 50vh; overflow-y: auto;"></div>
+    `;
+
+    this.configPanel.innerHTML = headerHTML;
+    document.body.appendChild(this.configPanel);
+
+    // Add CSS for custom slider styling
+    const style = document.createElement('style');
+    style.textContent = `
+      .sphere-pos-slider::-webkit-slider-thumb,
+      .sphere-radius-slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: white;
+        cursor: pointer;
+        border: 1px solid rgba(0,0,0,0.3);
+        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+      }
+      
+      .sphere-pos-slider::-webkit-slider-track,
+      .sphere-radius-slider::-webkit-slider-track {
+        height: 4px;
+        border-radius: 2px;
+        border: none;
+      }
+      
+      .sphere-pos-slider::-moz-range-thumb,
+      .sphere-radius-slider::-moz-range-thumb {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: white;
+        cursor: pointer;
+        border: 1px solid rgba(0,0,0,0.3);
+        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+      }
+    `;
+    document.head.appendChild(style);
+
+    // Event listeners
+    this.configPanel.querySelector('#close-config').onclick = () => this.hideConfigPanel();
+    this.configPanel.querySelector('#capture-positions').onclick = () => this.captureCurrentPositions();
+    this.configPanel.querySelector('#reset-default').onclick = () => this.resetToDefault();
+    this.configPanel.querySelector('#save-config').onclick = () => this.saveConfiguration();
+    
+    // Prevent context menu on the entire panel
+    this.configPanel.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+    
+    // Prevent long press menu on mobile for the entire panel
+    this.configPanel.addEventListener('touchstart', (e) => {
+      // Only prevent if target is a slider or part of the panel background
+      if (e.target.type === 'range' || e.target === this.configPanel) {
+        e.stopPropagation();
+      }
+    }, { passive: true });
+  }
+
+  captureCurrentPositions() {
+    if (!this.followers || this.followers.length === 0) return;
+
+    this.sphereConfigs = {
+      spheres: [],
+      timestamp: Date.now()
+    };
+
+    this.followers.forEach((sphere, index) => {
+      const pos = sphere.position;
+      const userData = sphere.userData;
+      this.sphereConfigs.spheres.push({
+        id: index,
+        position: { x: pos.x, y: pos.y, z: pos.z },
+        radius: userData.radius || 0.1,
+        baseRadius: userData.orbit?.baseRadius || Math.sqrt(pos.x*pos.x + pos.y*pos.y + pos.z*pos.z),
+        color: sphere.material ? `#${sphere.material.color.getHexString()}` : '#00FFFF'
+      });
+    });
+
+    this.defaultConfig = false;
+    this.updateConfigPanelValues();
+  }
+
+  updateConfigPanelValues() {
+    const spheresList = this.configPanel?.querySelector('#spheres-list');
+    if (!spheresList || !this.sphereConfigs) return;
+
+    let html = '';
+    this.sphereConfigs.spheres.forEach((config, index) => {
+      html += `
+        <div style="display: grid; grid-template-columns: 14px 1fr 1fr 1fr 1fr; gap: 3px; margin-bottom: 1px; padding: 2px 4px; background: rgba(255,255,255,0.05); border-radius: 2px; align-items: center;">
+          <div style="width: 8px; height: 8px; border-radius: 50%; background: ${config.color}; margin: auto; box-shadow: 0 0 4px ${config.color}88;"></div>
+          <input type="range" min="-5.6" max="5.6" step="0.05" value="${config.position.x.toFixed(2)}" 
+                 data-sphere="${index}" data-axis="x" class="sphere-pos-slider"
+                 style="width: 100%; height: 14px; background: rgba(255,0,0,0.3); border-radius: 7px; outline: none; -webkit-appearance: none;">
+          <input type="range" min="-5.6" max="5.6" step="0.05" value="${config.position.y.toFixed(2)}" 
+                 data-sphere="${index}" data-axis="y" class="sphere-pos-slider"
+                 style="width: 100%; height: 14px; background: rgba(0,255,0,0.3); border-radius: 7px; outline: none; -webkit-appearance: none;">
+          <input type="range" min="-8" max="12" step="0.05" value="${config.position.z.toFixed(2)}" 
+                 data-sphere="${index}" data-axis="z" class="sphere-pos-slider"
+                 style="width: 100%; height: 14px; background: rgba(0,0,255,0.3); border-radius: 7px; outline: none; -webkit-appearance: none;">
+          <input type="range" min="0.02" max="0.4" step="0.01" value="${config.radius.toFixed(2)}" 
+                 data-sphere="${index}" data-prop="radius" class="sphere-radius-slider"
+                 style="width: 100%; height: 14px; background: rgba(255,255,0,0.3); border-radius: 7px; outline: none; -webkit-appearance: none;">
+        </div>
+      `;
+    });
+
+    spheresList.innerHTML = html;
+
+    // Add event listeners for real-time updates
+    spheresList.querySelectorAll('.sphere-pos-slider').forEach(slider => {
+      // Prevent context menu on sliders
+      slider.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      });
+      
+      // Prevent text selection during drag
+      slider.addEventListener('selectstart', (e) => {
+        e.preventDefault();
+      });
+      
+      // Prevent long press context menu on mobile
+      slider.addEventListener('touchstart', (e) => {
+        e.stopPropagation();
+      }, { passive: true });
+      
+      slider.addEventListener('touchmove', (e) => {
+        e.stopPropagation();
+      }, { passive: true });
+      
+      slider.addEventListener('input', (e) => {
+        this.updateSpherePosition(e);
+      });
+    });
+    
+    spheresList.querySelectorAll('.sphere-radius-slider').forEach(slider => {
+      // Prevent context menu on sliders
+      slider.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      });
+      
+      // Prevent text selection during drag
+      slider.addEventListener('selectstart', (e) => {
+        e.preventDefault();
+      });
+      
+      // Prevent long press context menu on mobile
+      slider.addEventListener('touchstart', (e) => {
+        e.stopPropagation();
+      }, { passive: true });
+      
+      slider.addEventListener('touchmove', (e) => {
+        e.stopPropagation();
+      }, { passive: true });
+      
+      slider.addEventListener('input', (e) => {
+        this.updateSphereRadius(e);
+      });
+    });
+  }
+
+  updateSpherePosition(e) {
+    const sphereIndex = parseInt(e.target.dataset.sphere);
+    const axis = e.target.dataset.axis;
+    const value = parseFloat(e.target.value) || 0;
+
+    if (this.sphereConfigs && this.sphereConfigs.spheres[sphereIndex]) {
+      this.sphereConfigs.spheres[sphereIndex].position[axis] = value;
+      
+      // Update the actual sphere if it exists
+      if (this.followers[sphereIndex]) {
+        // Store the new base position
+        this.followers[sphereIndex].userData.basePosition = { ...this.sphereConfigs.spheres[sphereIndex].position };
+      }
+    }
+  }
+
+  updateSphereRadius(e) {
+    const sphereIndex = parseInt(e.target.dataset.sphere);
+    const value = parseFloat(e.target.value) || 0.1;
+
+    if (this.sphereConfigs && this.sphereConfigs.spheres[sphereIndex]) {
+      this.sphereConfigs.spheres[sphereIndex].radius = value;
+      
+      // Update the actual sphere if it exists
+      if (this.followers[sphereIndex]) {
+        // Create new geometry with the new radius
+        const oldGeometry = this.followers[sphereIndex].geometry;
+        this.followers[sphereIndex].geometry = new THREE.SphereGeometry(value, 24, 24);
+        oldGeometry.dispose();
+        
+        // Update the userData radius
+        this.followers[sphereIndex].userData.radius = value;
+        
+        // Update collider
+        if (this.sphereColliders[sphereIndex]) {
+          this.sphereColliders[sphereIndex].radius = value;
+        }
+      }
+    }
+  }
+
+  resetToDefault() {
+    // Create a centered configuration with all spheres at (0,0,0) with medium size
+    const DOT_COLORS = [
+      '#00FFFF', '#C77DFF', '#3D348B', '#7209B7', '#5E2EA7', 
+      '#A45CFF', '#36E5FF', '#8A2BE2', '#B794F4'
+    ];
+    
+    // Create color distribution for equal representation
+    const createColorDistribution = (totalSpheres, colors) => {
+      const distribution = [];
+      const colorsPerSphere = Math.floor(totalSpheres / colors.length);
+      const remainder = totalSpheres % colors.length;
+      
+      for (let i = 0; i < colors.length; i++) {
+        for (let j = 0; j < colorsPerSphere; j++) {
+          distribution.push(colors[i]);
+        }
+      }
+      
+      for (let i = 0; i < remainder; i++) {
+        distribution.push(colors[i]);
+      }
+      
+      // Shuffle the distribution array
+      for (let i = distribution.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [distribution[i], distribution[j]] = [distribution[j], distribution[i]];
+      }
+      
+      return distribution;
+    };
+    
+    const colorDistribution = createColorDistribution(this.followerCount, DOT_COLORS);
+    const mediumRadius = 0.15; // Medium size for all spheres
+    
+    // Create centered configuration
+    this.sphereConfigs = {
+      spheres: [],
+      timestamp: Date.now()
+    };
+    
+    for (let i = 0; i < this.followerCount; i++) {
+      // Create a small grid-like distribution around center so spheres are visible
+      const gridSize = Math.ceil(Math.sqrt(this.followerCount)); // Create a rough grid
+      const spacing = 0.4; // Small spacing between spheres
+      const row = Math.floor(i / gridSize);
+      const col = i % gridSize;
+      
+      // Center the grid around (0,0,0)
+      const offsetX = (col - (gridSize - 1) / 2) * spacing;
+      const offsetY = (row - (gridSize - 1) / 2) * spacing;
+      const offsetZ = Math.sin(i * 0.5) * 0.3; // Small Z variation for depth
+      
+      this.sphereConfigs.spheres.push({
+        id: i,
+        position: { x: offsetX, y: offsetY, z: offsetZ },
+        radius: mediumRadius,
+        baseRadius: Math.sqrt(offsetX*offsetX + offsetY*offsetY + offsetZ*offsetZ),
+        color: colorDistribution[i % colorDistribution.length]
+      });
+    }
+    
+    this.defaultConfig = false;
+    localStorage.setItem('sphereConfig', JSON.stringify(this.sphereConfigs));
+    
+    // Recreate spheres with centered positions
+    this.clearSpheres();
+    this.createSpheres();
+    this.updateConfigPanelValues();
+  }
+
+  createSpheresFromConfig() {
+    if (!this.sphereConfigs || !this.sphereConfigs.spheres) return;
+
+    this.sphereConfigs.spheres.forEach((config, index) => {
+      const { position, radius, color } = config;
+      
+      // Create sphere geometry and material
+      const geometry = new THREE.SphereGeometry(radius, 24, 24);
+      const sphereColor = new THREE.Color(color);
+      const emissiveColor = new THREE.Color(color).multiplyScalar(0.48);
+      
+      const material = new THREE.MeshStandardMaterial({ 
+        color: sphereColor, 
+        emissive: emissiveColor, 
+        roughness: 0.6, 
+        metalness: 0.1, 
+        transparent: true,
+        opacity: this.currentOpacity
+      });
+      
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.position.set(position.x, position.y, position.z);
+      
+      // Orbital behavior data - use configured position as base
+      const baseRadius = Math.sqrt(position.x*position.x + position.y*position.y + position.z*position.z);
+      const orbit = { 
+        baseRadius: baseRadius, 
+        theta: Math.atan2(position.z, position.x), 
+        phi: Math.acos(position.y / baseRadius), 
+        dTheta: this.rand(-0.15, 0.15) * 0.25, 
+        dPhi: this.rand(-0.15, 0.15) * 0.25, 
+        followLerp: this.rand(0.01, 0.03), 
+        zMul: this.rand(1.3, 2.2), 
+        zBias: -this.rand(0.3, 1.0) 
+      };
+      
+      mesh.userData.orbit = orbit; 
+      mesh.userData.radius = radius;
+      mesh.userData.basePosition = { ...position }; // Store configured base position
+      mesh.renderOrder = 1;
+      
+      this.followers.push(mesh);
+      if (this.spheresGroup) {
+        this.spheresGroup.add(mesh);
+      }
+      
+      // Update colliders for face avoidance
+      this.sphereColliders.push({ 
+        x: position.x, 
+        y: position.y, 
+        z: position.z, 
+        radius 
+      });
+    });
+  }
+
+  saveConfiguration() {
+    if (this.sphereConfigs) {
+      this.saveSphereConfig();
+      this.hideConfigPanel();
+      
+      // Show confirmation
+      const msg = document.createElement('div');
+      msg.style.cssText = `
+        position: fixed; top: 20px; right: 20px; z-index: 3000;
+        background: #0A6B47; color: white; padding: 8px 16px; border-radius: 6px;
+        font-family: 'Plus Jakarta Sans', sans-serif; font-size: 12px;
+        border: 1px solid #0F7B52; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      `;
+      msg.textContent = 'Configuration saved!';
+      document.body.appendChild(msg);
+      
+      setTimeout(() => {
+        if (msg.parentNode) msg.parentNode.removeChild(msg);
+      }, 2000);
+    }
+  }
+
+  setupPhotoCapture() {
+    // Photo capture is now handled by the UI manager system
+    // This method is kept for compatibility but doesn't add conflicting listeners
   }
 }
 

@@ -180,8 +180,7 @@ class UIManager {
       
   // Start recording
       this.recorderContainer.classList.add('recording');
-  // Ensure we are in draw mode to use the single renderer path for rings
-  try { this.selectFilterMode('draw'); } catch(_) {}
+      // DON'T force mode change - stay in current mode
       this.videoCapture.beginVideoRecording();
       
       // Start word roulette if in draw mode
@@ -196,10 +195,16 @@ class UIManager {
     
     this.recorderContainer.classList.remove('active');
     
-    // Short tap: cancel intention
+    // Short tap: take photo in sphere mode, cancel in draw mode
     if (this.pressTimer) {
       clearTimeout(this.pressTimer);
       this.pressTimer = null;
+      
+      // Take photo on short tap in sphere mode
+      if (this.currentMode === 'spheres' && this.videoCapture) {
+        this.videoCapture.takePhoto();
+      }
+      
       return;
     }
     

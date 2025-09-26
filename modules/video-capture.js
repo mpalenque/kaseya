@@ -75,12 +75,106 @@ class VideoCapture {
     this.flashElement.classList.add('flashing');
     setTimeout(() => this.flashElement.classList.remove('flashing'), 200);
     
-    const composite = this.composeFrame();
+    // Use new composition method that includes 3D spheres
+    const composite = this.composePhotoFrame();
+    
+    // Show preview immediately using canvas data URL (faster)
+    const dataUrl = composite.toDataURL('image/png');
+    this.showInstantPreview(dataUrl, 'image');
+    
+    // Process file in background for download/sharing
     composite.toBlob(async blob => {
       const file = new File([blob], `photo_${Date.now()}.png`, { type: 'image/png' });
-      this.showPreview(file, 'image');
+      this.currentFile = file; // Update the file for download/share functionality
     }, 'image/png');
   }
+
+  showInstantPreview(dataUrl, type) {
+    if (type === 'video') {
+      // For videos, fall back to the original method
+      this.previewVideo.src = dataUrl;
+      this.previewVideo.style.display = 'block';
+      this.previewImage.style.display = 'none';
+    } else {
+      // For images, use data URL directly (instant display)
+      this.previewImage.src = dataUrl;
+      this.previewImage.style.display = 'block';
+      this.previewVideo.style.display = 'none';
+    }
+    
+    this.previewContainer.classList.add('visible');
+    
+    // Ensure preview wrapper uses exact screen aspect
+    try {
+      document.documentElement.style.setProperty('--screen-ar', (window.innerWidth / window.innerHeight).toString());
+    } catch(e){}
+  }
+
+  composePhotoFrame() {
+    // Create canvas with full viewport dimensions to include footer
+    const compositeCanvas = document.createElement('canvas');
+    compositeCanvas.width = window.innerWidth;
+    compositeCanvas.height = window.innerHeight;
+    const compositeCtx = compositeCanvas.getContext('2d');
+    
+    // For photos, we need to flip horizontally to create mirror effect
+    compositeCtx.save();
+    compositeCtx.scale(-1, 1);
+    compositeCtx.translate(-compositeCanvas.width, 0);
+    
+    // Draw webcam video covering the full viewport (now flipped)
+    if (this.webcamEl.videoWidth) {
+      this.drawWebcamCover(compositeCtx, this.webcamEl, compositeCanvas.width, compositeCanvas.height);
+    }
+    
+    // Capture and draw 3D spheres if active (now flipped)
+    if (this.sphereGame && this.sphereGame.isActive && this.sphereGame.renderer) {
+      try {
+        // Ensure renderer is the right size
+        this.sphereGame.renderer.setSize(compositeCanvas.width, compositeCanvas.height);
+        
+        // Force render the current frame
+        this.sphereGame.renderer.render(this.sphereGame.scene, this.sphereGame.camera);
+        
+        // Get the WebGL canvas content
+        const sphereCanvas = this.sphereGame.renderer.domElement;
+        
+        // Draw at exact same size and position
+        compositeCtx.drawImage(
+          sphereCanvas, 
+          0, 0, sphereCanvas.width, sphereCanvas.height,  // source
+          0, 0, compositeCanvas.width, compositeCanvas.height  // destination
+        );
+        
+        // Restore original renderer size to not affect normal display
+        this.sphereGame.renderer.setSize(window.innerWidth, window.innerHeight);
+      } catch (e) {
+        console.warn('Could not capture 3D spheres:', e);
+        // Restore size even if capture failed
+        try {
+          this.sphereGame.renderer.setSize(window.innerWidth, window.innerHeight);
+        } catch (e2) {}
+      }
+    }
+    
+    // Draw violet top gradient (now flipped)
+    this.drawTopGradient(compositeCtx, compositeCanvas.width, compositeCanvas.height);
+    
+    // Draw word text if visible and not in sphere mode (now flipped)
+    if (this.drawGame && (!this.sphereGame || !this.sphereGame.isActive) && this.drawGame.permanentWordElement && this.drawGame.permanentWordElement.style.opacity !== '0') {
+      this.drawWordOnCanvas(compositeCtx, compositeCanvas.width, compositeCanvas.height);
+    }
+    
+    // Restore context before drawing footer (footer should NOT be flipped)
+    compositeCtx.restore();
+    
+    // Draw footer in normal orientation
+    this.drawFooterOnCanvas(compositeCtx, compositeCanvas.width, compositeCanvas.height);
+    
+    return compositeCanvas;
+  }
+
+
 
   beginVideoRecording() {
     this.isRecording = true;
