@@ -117,7 +117,7 @@ body {
 .filter-btn .btn-inner.text { line-height:1.0; font-size:14px; text-transform:uppercase; display:inline-block; text-align:center; }
 .btn-alterego .btn-inner { display:none; }
 .btn-dots .btn-inner { font-size:38px; line-height:1; }
-.btn-none .btn-inner { font-size:32px; }
+.btn-none .btn-inner { font-size:32px; display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; }
 /* Botón Alter Ego basado en export Figma */
 .btn-alterego { background:transparent center/contain no-repeat url('assets/icons/Alter Ego Button.svg'); border:none; box-shadow:none; }
 .filter-wrapper.active .btn-alterego { background:transparent center/contain no-repeat url('assets/icons/Alter Ego Button.svg'); box-shadow:0 0 18px 0 rgba(170,59,255,0.55); }
@@ -317,6 +317,24 @@ body {
   border-color: #AA3BFF;
   animation: pulse 1s infinite;
   box-shadow:0 0 25px -2px rgba(170,59,255,0.75),0 0 0 6px rgba(170,59,255,0.35);
+}
+
+/* Press indicator image */
+.press-indicator {
+  position: absolute;
+  top: -18px;
+  right: -18px;
+  width: 30px;
+  height: 30px;
+  pointer-events: none;
+  z-index: 4;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+/* Show press indicator only in draw mode */
+.draw-mode .press-indicator {
+  opacity: 1;
 }
 
 @keyframes pulse {
