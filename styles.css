@@ -323,7 +323,7 @@ body {
 .press-indicator {
   position: absolute;
   top: -21px;
-  right: -29px;
+  right: -35px;
   width: 59px;
   height: auto;
   object-fit: contain;
