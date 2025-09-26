@@ -339,8 +339,9 @@ body {
   transform-origin: left center;
 }
 
-/* Show press indicator only in draw mode */
-.draw-mode .press-indicator {
+/* Show press indicator in draw mode and when the sphere game is active */
+.draw-mode .press-indicator,
+.sphere-mode .press-indicator {
   opacity: 1;
 }
 
