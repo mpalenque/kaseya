@@ -912,6 +912,16 @@ class SphereGame {
         forceServerLoad: forceServerLoad
       });
       
+      // 1) If a global STATIC_SPHERE_CONFIG exists, use it immediately (no fetch)
+      if (window.STATIC_SPHERE_CONFIG && Array.isArray(window.STATIC_SPHERE_CONFIG.spheres) && window.STATIC_SPHERE_CONFIG.spheres.length > 0) {
+        this.sphereConfigs = window.STATIC_SPHERE_CONFIG;
+        this.defaultConfig = false;
+        console.log('[SphereGame] ✅ Using STATIC_SPHERE_CONFIG:', this.sphereConfigs.spheres.length, 'spheres');
+        this.applyConfigIfActive();
+        this.configLoaded = true;
+        return;
+      }
+      
       if (!forceServerLoad) {
         // Try to load from localStorage first (for immediate use)
         const localConfig = localStorage.getItem('sphereConfig');
@@ -936,7 +946,7 @@ class SphereGame {
         console.log('[SphereGame] Forcing server load (GitHub Pages or ?forceServer)');
       }
 
-      // Try to fetch from server (GitHub Pages serves this as static file)
+  // 2) Try to fetch from server (local dev or other hosting). On GitHub Pages this will still work if file exists.
       const cacheBuster = Date.now();
       const configUrl = `sphere-config.json?v=${cacheBuster}`;
       console.log('[SphereGame] Fetching static config file:', configUrl);
@@ -975,7 +985,7 @@ class SphereGame {
         console.warn('[SphereGame] Server fetch failed:', response.status, response.statusText);
       }
       
-      // If we get here, use embedded config as last resort
+  // 3) If we get here, use embedded config as last resort
       console.log('[SphereGame] ⚠️ No valid sphere config found, using embedded default config');
       this.sphereConfigs = this.getEmbeddedConfig();
       this.defaultConfig = false;
