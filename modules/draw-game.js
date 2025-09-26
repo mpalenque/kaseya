@@ -215,18 +215,71 @@ class DrawGame {
         { thickness: tubeThickness * 6, opacity: 0.1 }    // Resplandor exterior
       ];
 
-      layers.forEach(layer => {
+      layers.forEach((layer, index) => {
         const geometry = new THREE.TorusGeometry(radius, layer.thickness, 16, 200);
-        const material = new THREE.MeshBasicMaterial({
-          color: color,
+        
+        // Crear shader personalizado para gradient + glow
+        const material = new THREE.ShaderMaterial({
+          uniforms: {
+            baseColor: { value: new THREE.Color(color) },
+            glowColor: { value: new THREE.Color(0xffffff) }, // Blanco para el glow
+            opacity: { value: layer.opacity },
+            time: { value: 0.0 }
+          },
+          vertexShader: `
+            varying vec2 vUv;
+            varying vec3 vPosition;
+            varying vec3 vNormal;
+            
+            void main() {
+              vUv = uv;
+              vPosition = position;
+              vNormal = normalize(normalMatrix * normal);
+              gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+          `,
+          fragmentShader: `
+            uniform vec3 baseColor;
+            uniform vec3 glowColor;
+            uniform float opacity;
+            uniform float time;
+            
+            varying vec2 vUv;
+            varying vec3 vPosition;
+            varying vec3 vNormal;
+            
+            void main() {
+              // Crear gradient radial desde el centro del tubo hacia afuera
+              vec2 center = vec2(0.5, 0.5);
+              float dist = distance(vUv, center);
+              
+              // Gradient desde el color base hacia blanco en el centro
+              float gradientFactor = smoothstep(0.0, 0.5, dist);
+              vec3 finalColor = mix(glowColor, baseColor, gradientFactor);
+              
+              // Añadir pulsación sutil
+              float pulse = sin(time * 2.0) * 0.1 + 0.9;
+              finalColor *= pulse;
+              
+              // Intensidad basada en la normal para simular iluminación
+              float intensity = dot(vNormal, vec3(0.0, 0.0, 1.0)) * 0.3 + 0.7;
+              finalColor *= intensity;
+              
+              gl_FragColor = vec4(finalColor, opacity);
+            }
+          `,
           transparent: true,
-          opacity: layer.opacity,
-          blending: THREE.AdditiveBlending // Clave para el efecto de brillo
+          blending: THREE.AdditiveBlending,
+          side: THREE.DoubleSide
         });
+        
         const ring = new THREE.Mesh(geometry, material);
         
         // Orient the torus so the ring stands vertically (wraps around the head) + inclination
         ring.rotation.x = inclination;
+        
+        // Guardar referencia al material para actualizar el tiempo
+        ring.userData.shaderMaterial = material;
         
         ringGroup.add(ring);
       });
@@ -478,6 +531,11 @@ class DrawGame {
             // Movimiento de rotación sobre sí mismos (rotación de los anillos internos)
             this.ring3DPurple.children.forEach(ring => {
               ring.rotation.z = t * 0.5;
+              
+              // Actualizar el tiempo en el shader para el efecto de pulsación
+              if (ring.userData.shaderMaterial && ring.userData.shaderMaterial.uniforms.time) {
+                ring.userData.shaderMaterial.uniforms.time.value = t;
+              }
             });
             
             // Movimiento vertical suave (subir y bajar) - muy sutil como en refearing.ts
@@ -491,6 +549,11 @@ class DrawGame {
             // Rotación sobre sí mismo con velocidad diferente
             this.ring3DCyan.children.forEach(ring => {
               ring.rotation.z = t * 0.4;
+              
+              // Actualizar el tiempo en el shader para el efecto de pulsación
+              if (ring.userData.shaderMaterial && ring.userData.shaderMaterial.uniforms.time) {
+                ring.userData.shaderMaterial.uniforms.time.value = t;
+              }
             });
             
             // Movimiento vertical desfasado usando cos - muy sutil como en refearing.ts
