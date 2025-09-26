@@ -912,18 +912,12 @@ class SphereGame {
         console.log('[SphereGame] Forcing server load (GitHub Pages or ?forceServer)');
       }
 
-      // Try to fetch from server with cache busting for GitHub Pages
+      // Try to fetch from server (GitHub Pages serves this as static file)
       const cacheBuster = Date.now();
-      const configUrl = isGitHubPages ? `sphere-config.json?v=${cacheBuster}` : 'sphere-config.json';
-      console.log('[SphereGame] Fetching from server (GitHub Pages:', isGitHubPages, '):', configUrl);
+      const configUrl = `sphere-config.json?v=${cacheBuster}`;
+      console.log('[SphereGame] Fetching static config file:', configUrl);
       
-      const response = await fetch(configUrl, {
-        method: 'GET',
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        }
-      });
+      const response = await fetch(configUrl);
       
       console.log('[SphereGame] Server response status:', response.status, response.statusText);
       
