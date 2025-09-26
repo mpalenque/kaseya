@@ -27,13 +27,13 @@ class DrawGame {
   this.RING_ANGLE_DELTA = 20.0;           // Delta rotation: 20.0°
     this.RING_Y_OFFSET = -14;
   // 3D ring advanced tuning
-  this.RING_SCALE_MULT = 2.65;           // 3D Size: 265%
+  this.RING_SCALE_MULT = 2.12;           // 3D Size: 212% (reducido 20% para que no salgan de pantalla)
   // 3-axis rotation in radians (apply after head alignment)
   this.RING_ROT_X_RAD = 25 * Math.PI / 180;  // Rot X: 25°
   this.RING_ROT_Y_RAD = 0.0;                  // Rot Y: 0°
   this.RING_ROT_Z_RAD = 0.0;                  // Rot Z: 0°
-  this.RING_UP_OFFSET_FACTOR = 1.51;          // Base Height: 151%
-  this.RING_UP_EXTRA_PX = 380;                // Extra Height: 380px
+  this.RING_UP_OFFSET_FACTOR = 1.2;           // Base Height: 120% (altura de la frente)
+  this.RING_UP_EXTRA_PX = 200;                // Extra Height: 200px (ajustado para frente)
   this.RING_LOCAL_Y_OFFSET_FACTOR = 0.0;     // extra vertical offset in units of face radius (applied along local Y)
   this.RING_BEHIND_OFFSET_FACTOR = 0.80;     // Depth: 80%
   this.RING_Z_SEPARATION = 0.35;             // Z Separation: 35% (more separation)
@@ -215,71 +215,18 @@ class DrawGame {
         { thickness: tubeThickness * 6, opacity: 0.1 }    // Resplandor exterior
       ];
 
-      layers.forEach((layer, index) => {
+      layers.forEach(layer => {
         const geometry = new THREE.TorusGeometry(radius, layer.thickness, 16, 200);
-        
-        // Crear shader personalizado para gradient + glow
-        const material = new THREE.ShaderMaterial({
-          uniforms: {
-            baseColor: { value: new THREE.Color(color) },
-            glowColor: { value: new THREE.Color(0xffffff) }, // Blanco para el glow
-            opacity: { value: layer.opacity },
-            time: { value: 0.0 }
-          },
-          vertexShader: `
-            varying vec2 vUv;
-            varying vec3 vPosition;
-            varying vec3 vNormal;
-            
-            void main() {
-              vUv = uv;
-              vPosition = position;
-              vNormal = normalize(normalMatrix * normal);
-              gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-            }
-          `,
-          fragmentShader: `
-            uniform vec3 baseColor;
-            uniform vec3 glowColor;
-            uniform float opacity;
-            uniform float time;
-            
-            varying vec2 vUv;
-            varying vec3 vPosition;
-            varying vec3 vNormal;
-            
-            void main() {
-              // Crear gradient radial desde el centro del tubo hacia afuera
-              vec2 center = vec2(0.5, 0.5);
-              float dist = distance(vUv, center);
-              
-              // Gradient desde el color base hacia blanco en el centro
-              float gradientFactor = smoothstep(0.0, 0.5, dist);
-              vec3 finalColor = mix(glowColor, baseColor, gradientFactor);
-              
-              // Añadir pulsación sutil
-              float pulse = sin(time * 2.0) * 0.1 + 0.9;
-              finalColor *= pulse;
-              
-              // Intensidad basada en la normal para simular iluminación
-              float intensity = dot(vNormal, vec3(0.0, 0.0, 1.0)) * 0.3 + 0.7;
-              finalColor *= intensity;
-              
-              gl_FragColor = vec4(finalColor, opacity);
-            }
-          `,
+        const material = new THREE.MeshBasicMaterial({
+          color: color,
           transparent: true,
-          blending: THREE.AdditiveBlending,
-          side: THREE.DoubleSide
+          opacity: layer.opacity,
+          blending: THREE.AdditiveBlending // Clave para el efecto de brillo
         });
-        
         const ring = new THREE.Mesh(geometry, material);
         
         // Orient the torus so the ring stands vertically (wraps around the head) + inclination
         ring.rotation.x = inclination;
-        
-        // Guardar referencia al material para actualizar el tiempo
-        ring.userData.shaderMaterial = material;
         
         ringGroup.add(ring);
       });
@@ -343,6 +290,11 @@ class DrawGame {
     if (isMobile) {
       upOffset -= radius * 0.25; // Stronger downward adjustment for mobile devices
     }
+
+    // Restricción adicional: los anillos nunca deben quedar más arriba que el cartel del texto
+    // Limitar upOffset para que los anillos queden a la altura de la frente, por debajo del texto banner
+    const maxUpOffset = radius * 1.3; // Máximo 130% del radio de la cara hacia arriba (altura de frente)
+    upOffset = Math.min(upOffset, maxUpOffset);
 
   // Position rings based on face tracking
     if (ft.headOccluderRoot) {
@@ -525,39 +477,29 @@ class DrawGame {
           const THREE = window.THREE;
           
           if (this.ring3DPurple) {
-            // Movimiento orbital (rotación del pivote) - como en refearing.ts
-            this.ring3DPurple.rotation.y = t * 0.3;
+            // Movimiento orbital (rotación del pivote) - 15% más rápido
+            this.ring3DPurple.rotation.y = t * 0.345; // 0.3 * 1.15
             
-            // Movimiento de rotación sobre sí mismos (rotación de los anillos internos)
+            // Movimiento de rotación sobre sí mismos (rotación de los anillos internos) - 15% más rápido
             this.ring3DPurple.children.forEach(ring => {
-              ring.rotation.z = t * 0.5;
-              
-              // Actualizar el tiempo en el shader para el efecto de pulsación
-              if (ring.userData.shaderMaterial && ring.userData.shaderMaterial.uniforms.time) {
-                ring.userData.shaderMaterial.uniforms.time.value = t;
-              }
+              ring.rotation.z = t * 0.575; // 0.5 * 1.15
             });
             
-            // Movimiento vertical suave (subir y bajar) - muy sutil como en refearing.ts
-            this.ring3DPurple.position.y = Math.sin(t * 0.7) * 0.08;
+            // Movimiento vertical suave (subir y bajar) - 15% más rápido
+            this.ring3DPurple.position.y = Math.sin(t * 0.805) * 0.08; // 0.7 * 1.15
           }
 
           if (this.ring3DCyan) {
-            // Movimiento orbital con velocidad ligeramente diferente
-            this.ring3DCyan.rotation.y = t * 0.25;
+            // Movimiento orbital con velocidad ligeramente diferente - 15% más rápido
+            this.ring3DCyan.rotation.y = t * 0.2875; // 0.25 * 1.15
             
-            // Rotación sobre sí mismo con velocidad diferente
+            // Rotación sobre sí mismo con velocidad diferente - 15% más rápido
             this.ring3DCyan.children.forEach(ring => {
-              ring.rotation.z = t * 0.4;
-              
-              // Actualizar el tiempo en el shader para el efecto de pulsación
-              if (ring.userData.shaderMaterial && ring.userData.shaderMaterial.uniforms.time) {
-                ring.userData.shaderMaterial.uniforms.time.value = t;
-              }
+              ring.rotation.z = t * 0.46; // 0.4 * 1.15
             });
             
-            // Movimiento vertical desfasado usando cos - muy sutil como en refearing.ts
-            this.ring3DCyan.position.y = Math.cos(t * 0.5) * 0.08;
+            // Movimiento vertical desfasado usando cos - 15% más rápido
+            this.ring3DCyan.position.y = Math.cos(t * 0.575) * 0.08; // 0.5 * 1.15
           }
         } catch (e) {
           // swallow animation errors
