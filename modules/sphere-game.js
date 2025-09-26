@@ -898,112 +898,12 @@ class SphereGame {
   }
 
   async loadSphereConfig() {
-    console.log('[SphereGame] Loading sphere configuration...');
-    
-    try {
-      // Force server load for GitHub Pages or when explicitly requested
-      const isGitHubPages = window.location.hostname.includes('github.io') || 
-                           window.location.hostname.includes('githubusercontent.com');
-      const forceServerLoad = new URLSearchParams(window.location.search).has('forceServer') || isGitHubPages;
-      
-      console.log('[SphereGame] Environment check:', {
-        hostname: window.location.hostname,
-        isGitHubPages: isGitHubPages,
-        forceServerLoad: forceServerLoad
-      });
-
-      // NOTE on precedence:
-      // - Try to fetch sphere-config.json first (works on GitHub Pages and locally)
-      // - Fall back to STATIC_SPHERE_CONFIG only if fetch is unavailable or invalid
-      // - LocalStorage is only used when not forcing server load
-      
-      if (!forceServerLoad) {
-        // Try to load from localStorage first (for immediate use)
-        const localConfig = localStorage.getItem('sphereConfig');
-        if (localConfig) {
-          try {
-            this.sphereConfigs = JSON.parse(localConfig);
-            // Validate that it has spheres
-            if (this.sphereConfigs.spheres && this.sphereConfigs.spheres.length > 0) {
-              this.defaultConfig = false;
-              console.log('[SphereGame] ✅ Loaded from localStorage:', this.sphereConfigs.spheres.length, 'spheres');
-              // Apply immediately if active
-              this.applyConfigIfActive();
-              this.configLoaded = true;
-              return;
-            }
-          } catch (e) {
-            console.warn('[SphereGame] Invalid localStorage config, trying server:', e);
-            localStorage.removeItem('sphereConfig'); // Clear corrupted data
-          }
-        }
-      } else {
-        console.log('[SphereGame] Forcing server load (GitHub Pages or ?forceServer)');
-      }
-
-  // 1) Try to fetch from server (local dev or other hosting). On GitHub Pages this will still work if file exists.
-      const cacheBuster = Date.now();
-      const configUrl = `sphere-config.json?v=${cacheBuster}`;
-      console.log('[SphereGame] Fetching static config file:', configUrl);
-      
-      const response = await fetch(configUrl);
-      
-      console.log('[SphereGame] Static file response status:', response.status, response.statusText);
-      
-      if (response.ok) {
-        const configText = await response.text();
-        console.log('[SphereGame] Raw config received (first 100 chars):', configText.substring(0, 100));
-        
-        const serverConfig = JSON.parse(configText);
-        console.log('[SphereGame] Parsed config:', serverConfig);
-        
-        // Validate server config
-        if (serverConfig.spheres && serverConfig.spheres.length > 0) {
-          this.sphereConfigs = serverConfig;
-          this.defaultConfig = false;
-          
-          // Only cache in localStorage if not on GitHub Pages (to avoid override issues)
-          if (!isGitHubPages) {
-            localStorage.setItem('sphereConfig', JSON.stringify(this.sphereConfigs));
-          }
-          
-          console.log('[SphereGame] ✅ Loaded from server:', serverConfig.spheres.length, 'spheres');
-          console.log('[SphereGame] First sphere position:', serverConfig.spheres[0]?.position);
-          // Apply immediately if active
-          this.applyConfigIfActive();
-          this.configLoaded = true;
-          return;
-        } else {
-          console.warn('[SphereGame] Server config invalid - no spheres array or empty');
-        }
-      } else {
-        console.warn('[SphereGame] Server fetch failed:', response.status, response.statusText);
-      }
-
-      // 2) Fall back to STATIC_SPHERE_CONFIG if available (useful on GitHub Pages)
-      if (window.STATIC_SPHERE_CONFIG && Array.isArray(window.STATIC_SPHERE_CONFIG.spheres) && window.STATIC_SPHERE_CONFIG.spheres.length > 0) {
-        this.sphereConfigs = window.STATIC_SPHERE_CONFIG;
-        this.defaultConfig = false;
-        console.log('[SphereGame] ✅ Using STATIC_SPHERE_CONFIG fallback:', this.sphereConfigs.spheres.length, 'spheres');
-        this.applyConfigIfActive();
-        this.configLoaded = true;
-        return;
-      }
-      
-  // 3) If we get here, use embedded config as last resort
-      console.log('[SphereGame] ⚠️ No valid sphere config found, using embedded default config');
-      this.sphereConfigs = this.getEmbeddedConfig();
-      this.defaultConfig = false;
-      this.applyConfigIfActive();
-      this.configLoaded = true;
-    } catch (e) {
-      console.error('[SphereGame] Error loading sphere config:', e);
-      console.log('[SphereGame] ⚠️ Using embedded config due to error');
-      this.sphereConfigs = this.getEmbeddedConfig();
-      this.defaultConfig = false;
-      this.applyConfigIfActive();
-      this.configLoaded = true;
-    }
+    // Always use embedded fixed configuration (no server, no localStorage, no editor required)
+    console.log('[SphereGame] Using embedded fixed configuration (no server/editor required)');
+    this.sphereConfigs = this.getEmbeddedConfig();
+    this.defaultConfig = false;
+    this.applyConfigIfActive();
+    this.configLoaded = true;
   }
 
   // If the game is active, recreate spheres from the latest loaded config
@@ -1028,9 +928,9 @@ class SphereGame {
         {"id": 5, "position": {"x": -0.8, "y": -0.4, "z": 0.18}, "radius": 0.15, "baseRadius": 0.89, "color": "#A45CFF"},
         {"id": 6, "position": {"x": -0.4, "y": -0.4, "z": -0.12}, "radius": 0.15, "baseRadius": 0.57, "color": "#36E5FF"},
         {"id": 7, "position": {"x": 0.0, "y": -0.4, "z": 0.24}, "radius": 0.15, "baseRadius": 0.47, "color": "#8A2BE2"},
-        {"id": 8, "position": {"x": 0.4, "y": -0.4, "z": -0.06}, "radius": 0.15, "baseRadius": 0.57, "color": "#B794F4"},
+        {"id": 8, "position": {"x": 0.4, "y": -0.4, "z": -0.06}, "radius": 0.15, "baseRadius": 0.57, "color": "#00FFFF"},
         {"id": 9, "position": {"x": 0.8, "y": -0.4, "z": 0.21}, "radius": 0.15, "baseRadius": 0.89, "color": "#00FFFF"},
-        {"id": 10, "position": {"x": -0.8, "y": 0.0, "z": -0.09}, "radius": 0.15, "baseRadius": 0.8, "color": "#C77DFF"},
+        {"id": 10, "position": {"x": -0.8, "y": 0.0, "z": -0.09}, "radius": 0.15, "baseRadius": 0.8, "color": "#00FFFF"},
         {"id": 11, "position": {"x": -0.4, "y": 0.0, "z": 0.15}, "radius": 0.15, "baseRadius": 0.43, "color": "#3D348B"},
         {"id": 12, "position": {"x": 0.0, "y": 0.0, "z": -0.21}, "radius": 0.15, "baseRadius": 0.21, "color": "#7209B7"},
         {"id": 13, "position": {"x": 0.4, "y": 0.0, "z": 0.09}, "radius": 0.15, "baseRadius": 0.43, "color": "#5E2EA7"},
