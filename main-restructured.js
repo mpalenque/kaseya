@@ -112,6 +112,9 @@ class KaseyaApp {
     // Connect sphereGame to videoCapture
     this.videoCapture.sphereGame = this.sphereGame;
     
+    // Expose for debugging on GitHub Pages
+    window.sphereGameInstance = this.sphereGame;
+    
     // Initialize UI Manager
     this.uiManager = new UIManager();
     this.uiManager.init({

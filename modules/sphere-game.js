@@ -366,17 +366,22 @@ class SphereGame {
 
   createSpheres() {
     if (!this.scene || typeof THREE === 'undefined') {
-      console.error('THREE.js scene not ready');
+      console.error('[SphereGame] THREE.js scene not ready');
       return;
     }
+    
+    console.log('[SphereGame] Creating spheres - defaultConfig:', this.defaultConfig, 'hasConfig:', !!this.sphereConfigs);
     
     this.clearSpheres();
     
     // Check if we should use custom config or generate defaults
     if (!this.defaultConfig && this.sphereConfigs && this.sphereConfigs.spheres) {
+      console.log('[SphereGame] Using configuration file with', this.sphereConfigs.spheres.length, 'spheres');
       this.createSpheresFromConfig();
       return;
     }
+    
+    console.log('[SphereGame] Using algorithmic sphere generation (default mode)');
     
     // Default sphere generation (original logic)
     // Color palette matching the original design
@@ -872,6 +877,8 @@ class SphereGame {
   }
 
   async loadSphereConfig() {
+    console.log('[SphereGame] Loading sphere configuration...');
+    
     try {
       // Try to load from localStorage first (for immediate use)
       const localConfig = localStorage.getItem('sphereConfig');
@@ -881,37 +888,77 @@ class SphereGame {
           // Validate that it has spheres
           if (this.sphereConfigs.spheres && this.sphereConfigs.spheres.length > 0) {
             this.defaultConfig = false;
-            console.log('Loaded sphere config from localStorage with', this.sphereConfigs.spheres.length, 'spheres');
+            console.log('[SphereGame] ✅ Loaded from localStorage:', this.sphereConfigs.spheres.length, 'spheres');
             return;
           }
         } catch (e) {
-          console.warn('Invalid localStorage config, trying server');
+          console.warn('[SphereGame] Invalid localStorage config, trying server:', e);
+          localStorage.removeItem('sphereConfig'); // Clear corrupted data
         }
       }
 
-      // Try to fetch from server
-      const response = await fetch('sphere-config.json');
+      // Detect if we're on GitHub Pages
+      const isGitHubPages = window.location.hostname.includes('github.io') || window.location.hostname.includes('githubusercontent.com');
+      
+      // Try to fetch from server with cache busting for GitHub Pages
+      const cacheBuster = Date.now();
+      const configUrl = isGitHubPages ? `sphere-config.json?v=${cacheBuster}` : 'sphere-config.json';
+      console.log('[SphereGame] Fetching from server (GitHub Pages:', isGitHubPages, '):', configUrl);
+      
+      const response = await fetch(configUrl, {
+        method: 'GET',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
+      
+      console.log('[SphereGame] Server response status:', response.status, response.statusText);
+      
       if (response.ok) {
         const serverConfig = await response.json();
+        console.log('[SphereGame] Server config received:', serverConfig);
+        
         // Validate server config
         if (serverConfig.spheres && serverConfig.spheres.length > 0) {
           this.sphereConfigs = serverConfig;
           this.defaultConfig = false;
           // Cache in localStorage
           localStorage.setItem('sphereConfig', JSON.stringify(this.sphereConfigs));
-          console.log('Loaded sphere config from server with', serverConfig.spheres.length, 'spheres');
+          console.log('[SphereGame] ✅ Loaded from server:', serverConfig.spheres.length, 'spheres');
           return;
+        } else {
+          console.warn('[SphereGame] Server config invalid - no spheres array or empty');
         }
+      } else {
+        console.warn('[SphereGame] Server fetch failed:', response.status, response.statusText);
       }
       
       // If we get here, neither localStorage nor server had valid config
-      console.log('No valid sphere config found, using algorithmic defaults');
+      console.log('[SphereGame] ⚠️ No valid sphere config found, using algorithmic defaults');
       this.defaultConfig = true;
       this.sphereConfigs = null;
     } catch (e) {
-      console.log('Error loading sphere config, using algorithmic defaults:', e);
+      console.error('[SphereGame] Error loading sphere config:', e);
+      console.log('[SphereGame] ⚠️ Using algorithmic defaults due to error');
       this.defaultConfig = true;
       this.sphereConfigs = null;
+    }
+  }
+
+  // Force reload configuration from server (useful for GitHub Pages)
+  async forceReloadConfig() {
+    console.log('[SphereGame] Force reloading configuration from server...');
+    // Clear localStorage to force server fetch
+    localStorage.removeItem('sphereConfig');
+    this.defaultConfig = true;
+    this.sphereConfigs = null;
+    
+    await this.loadSphereConfig();
+    
+    // Recreate spheres if we're active
+    if (this.isActive) {
+      this.createSpheres();
     }
   }
 
@@ -1354,3 +1401,22 @@ class SphereGame {
 
 // Export for use in other modules
 window.SphereGame = SphereGame;
+
+// Debug function for GitHub Pages testing
+window.debugSphereConfig = () => {
+  if (window.sphereGameInstance) {
+    console.log('Current config state:', {
+      defaultConfig: window.sphereGameInstance.defaultConfig,
+      hasConfig: !!window.sphereGameInstance.sphereConfigs,
+      sphereCount: window.sphereGameInstance.sphereConfigs?.spheres?.length || 0
+    });
+  }
+};
+
+// Force reload function for GitHub Pages testing
+window.forceReloadSphereConfig = async () => {
+  if (window.sphereGameInstance) {
+    await window.sphereGameInstance.forceReloadConfig();
+    console.log('Configuration reloaded!');
+  }
+};
