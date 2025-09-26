@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Sphere Config</title>
+    <style>
+        body { font-family: monospace; padding: 20px; }
+        pre { background: #f0f0f0; padding: 10px; margin: 10px 0; }
+        .section { border: 1px solid #ccc; margin: 10px 0; padding: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Sphere Configuration Debug</h1>
+    
+    <div class="section">
+        <h2>1. LocalStorage Content</h2>
+        <pre id="localStorage-content">Loading...</pre>
+    </div>
+    
+    <div class="section">
+        <h2>2. Server File Content</h2>
+        <pre id="server-content">Loading...</pre>
+    </div>
+    
+    <div class="section">
+        <h2>3. Current Environment</h2>
+        <pre id="environment-info">Loading...</pre>
+    </div>
+    
+    <div class="section">
+        <h2>4. Actions</h2>
+        <button onclick="clearLocalStorage()">Clear LocalStorage</button>
+        <button onclick="loadFromServer()">Force Load from Server</button>
+        <button onclick="compareConfigs()">Compare Configs</button>
+    </div>
+    
+    <div class="section">
+        <h2>5. Comparison Results</h2>
+        <pre id="comparison-results"></pre>
+    </div>
+
+    <script>
+        // Show environment info
+        document.getElementById('environment-info').textContent = JSON.stringify({
+            hostname: window.location.hostname,
+            pathname: window.location.pathname,
+            isGitHubPages: window.location.hostname.includes('github.io') || window.location.hostname.includes('githubusercontent.com'),
+            isLocalhost: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        }, null, 2);
+
+        // Show localStorage content
+        function showLocalStorage() {
+            const config = localStorage.getItem('sphereConfig');
+            if (config) {
+                try {
+                    const parsed = JSON.parse(config);
+                    document.getElementById('localStorage-content').textContent = JSON.stringify(parsed, null, 2);
+                } catch (e) {
+                    document.getElementById('localStorage-content').textContent = 'Invalid JSON: ' + config;
+                }
+            } else {
+                document.getElementById('localStorage-content').textContent = 'No sphereConfig found in localStorage';
+            }
+        }
+
+        // Load from server
+        async function loadFromServer() {
+            try {
+                const response = await fetch('sphere-config.json?v=' + Date.now());
+                if (response.ok) {
+                    const config = await response.json();
+                    document.getElementById('server-content').textContent = JSON.stringify(config, null, 2);
+                } else {
+                    document.getElementById('server-content').textContent = 'Error loading: ' + response.status + ' ' + response.statusText;
+                }
+            } catch (e) {
+                document.getElementById('server-content').textContent = 'Error: ' + e.message;
+            }
+        }
+
+        // Clear localStorage
+        function clearLocalStorage() {
+            localStorage.removeItem('sphereConfig');
+            showLocalStorage();
+            alert('LocalStorage cleared!');
+        }
+
+        // Compare configurations
+        function compareConfigs() {
+            const localConfig = localStorage.getItem('sphereConfig');
+            const serverContent = document.getElementById('server-content').textContent;
+            
+            let comparison = '';
+            
+            if (!localConfig) {
+                comparison += 'LocalStorage: EMPTY - will use server config\n\n';
+            } else {
+                try {
+                    const localParsed = JSON.parse(localConfig);
+                    const serverParsed = JSON.parse(serverContent);
+                    
+                    comparison += 'LocalStorage spheres: ' + (localParsed.spheres?.length || 0) + '\n';
+                    comparison += 'Server spheres: ' + (serverParsed.spheres?.length || 0) + '\n\n';
+                    
+                    if (localParsed.spheres && serverParsed.spheres) {
+                        const localFirst = localParsed.spheres[0];
+                        const serverFirst = serverParsed.spheres[0];
+                        
+                        comparison += 'First sphere comparison:\n';
+                        comparison += 'Local:  ' + JSON.stringify(localFirst) + '\n';
+                        comparison += 'Server: ' + JSON.stringify(serverFirst) + '\n';
+                        comparison += 'Match: ' + (JSON.stringify(localFirst) === JSON.stringify(serverFirst)) + '\n';
+                    }
+                } catch (e) {
+                    comparison += 'Error comparing: ' + e.message;
+                }
+            }
+            
+            document.getElementById('comparison-results').textContent = comparison;
+        }
+
+        // Initialize
+        showLocalStorage();
+        loadFromServer();
+    </script>
+</body>
+</html>

@@ -880,26 +880,38 @@ class SphereGame {
     console.log('[SphereGame] Loading sphere configuration...');
     
     try {
-      // Try to load from localStorage first (for immediate use)
-      const localConfig = localStorage.getItem('sphereConfig');
-      if (localConfig) {
-        try {
-          this.sphereConfigs = JSON.parse(localConfig);
-          // Validate that it has spheres
-          if (this.sphereConfigs.spheres && this.sphereConfigs.spheres.length > 0) {
-            this.defaultConfig = false;
-            console.log('[SphereGame] ✅ Loaded from localStorage:', this.sphereConfigs.spheres.length, 'spheres');
-            return;
+      // Force server load for GitHub Pages or when explicitly requested
+      const isGitHubPages = window.location.hostname.includes('github.io') || 
+                           window.location.hostname.includes('githubusercontent.com');
+      const forceServerLoad = new URLSearchParams(window.location.search).has('forceServer') || isGitHubPages;
+      
+      console.log('[SphereGame] Environment check:', {
+        hostname: window.location.hostname,
+        isGitHubPages: isGitHubPages,
+        forceServerLoad: forceServerLoad
+      });
+      
+      if (!forceServerLoad) {
+        // Try to load from localStorage first (for immediate use)
+        const localConfig = localStorage.getItem('sphereConfig');
+        if (localConfig) {
+          try {
+            this.sphereConfigs = JSON.parse(localConfig);
+            // Validate that it has spheres
+            if (this.sphereConfigs.spheres && this.sphereConfigs.spheres.length > 0) {
+              this.defaultConfig = false;
+              console.log('[SphereGame] ✅ Loaded from localStorage:', this.sphereConfigs.spheres.length, 'spheres');
+              return;
+            }
+          } catch (e) {
+            console.warn('[SphereGame] Invalid localStorage config, trying server:', e);
+            localStorage.removeItem('sphereConfig'); // Clear corrupted data
           }
-        } catch (e) {
-          console.warn('[SphereGame] Invalid localStorage config, trying server:', e);
-          localStorage.removeItem('sphereConfig'); // Clear corrupted data
         }
+      } else {
+        console.log('[SphereGame] Forcing server load (GitHub Pages or ?forceServer)');
       }
 
-      // Detect if we're on GitHub Pages
-      const isGitHubPages = window.location.hostname.includes('github.io') || window.location.hostname.includes('githubusercontent.com');
-      
       // Try to fetch from server with cache busting for GitHub Pages
       const cacheBuster = Date.now();
       const configUrl = isGitHubPages ? `sphere-config.json?v=${cacheBuster}` : 'sphere-config.json';
@@ -923,9 +935,14 @@ class SphereGame {
         if (serverConfig.spheres && serverConfig.spheres.length > 0) {
           this.sphereConfigs = serverConfig;
           this.defaultConfig = false;
-          // Cache in localStorage
-          localStorage.setItem('sphereConfig', JSON.stringify(this.sphereConfigs));
+          
+          // Only cache in localStorage if not on GitHub Pages (to avoid override issues)
+          if (!isGitHubPages) {
+            localStorage.setItem('sphereConfig', JSON.stringify(this.sphereConfigs));
+          }
+          
           console.log('[SphereGame] ✅ Loaded from server:', serverConfig.spheres.length, 'spheres');
+          console.log('[SphereGame] First sphere position:', serverConfig.spheres[0]?.position);
           return;
         } else {
           console.warn('[SphereGame] Server config invalid - no spheres array or empty');
