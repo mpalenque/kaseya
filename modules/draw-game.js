@@ -203,30 +203,45 @@ class DrawGame {
     this.ring3DGroup = new THREE.Group();
     this.ring3DGroup.name = 'draw-game-rings';
 
-  // Make ring thinner (further reduced thickness) without changing overall size
-  const torusGeo = new THREE.TorusGeometry(1.0, 0.05 * 0.55, 32, 120);
+    // Función para crear un anillo con efecto de "glow" usando capas múltiples
+    const createGlowingRing = (radius, tubeThickness, color, name, inclination) => {
+      const ringGroup = new THREE.Group();
+      ringGroup.name = name;
 
-    const matP = new THREE.MeshStandardMaterial({ color: 0xAA3BFF, emissive: 0x5511AA, roughness: 0.4, metalness: 0.2 });
-    const matC = new THREE.MeshStandardMaterial({ color: 0x00F0FF, emissive: 0x003344, roughness: 0.35, metalness: 0.1 });
+      // Capas para el efecto de "glow" - similar a refearing.ts
+      const layers = [
+        { thickness: tubeThickness, opacity: 0.8 },      // Núcleo brillante
+        { thickness: tubeThickness * 3, opacity: 0.3 },   // Resplandor medio
+        { thickness: tubeThickness * 6, opacity: 0.1 }    // Resplandor exterior
+      ];
 
-    this.ring3DPurple = new THREE.Mesh(torusGeo.clone(), matP);
-    this.ring3DCyan = new THREE.Mesh(torusGeo.clone(), matC);
+      layers.forEach(layer => {
+        const geometry = new THREE.TorusGeometry(radius, layer.thickness, 16, 200);
+        const material = new THREE.MeshBasicMaterial({
+          color: color,
+          transparent: true,
+          opacity: layer.opacity,
+          blending: THREE.AdditiveBlending // Clave para el efecto de brillo
+        });
+        const ring = new THREE.Mesh(geometry, material);
+        
+        // Orient the torus so the ring stands vertically (wraps around the head) + inclination
+        ring.rotation.x = inclination;
+        
+        ringGroup.add(ring);
+      });
 
-  // Slightly different base radii to avoid visual overlap
-  // Purple slightly larger, Cyan slightly smaller so edges don't coincide
-  this.ring3DPurple.scale.setScalar(1.06);
-  this.ring3DCyan.scale.setScalar(0.98);
+      return ringGroup;
+    };
 
-  // Orient the torus so the ring stands vertically (wraps around the head)
-  this.ring3DPurple.rotation.x = Math.PI / 2;
-  this.ring3DCyan.rotation.x = Math.PI / 2;
+    // Crear los anillos con colores similares a refearing.ts
+    // Grosor reducido al 10% (0.03 * 0.1 = 0.003) y con inclinaciones como en refearing.ts
+    this.ring3DPurple = createGlowingRing(1.0, 0.003, 0xcc66ff, 'purple-ring', Math.PI / 2.2); // Magenta
+    this.ring3DCyan = createGlowingRing(1.02, 0.003, 0x66ccff, 'cyan-ring', Math.PI / 2.5);     // Azul cian
 
-  // Slightly rotate the second ring so they don't perfectly overlap
-  this.ring3DCyan.rotation.z = this.RING_CYAN_ROT_Z_OFFSET + this.RING_INDIVIDUAL_ROT_OFFSET; // configurable offset between rings
-
-  // Render order: keep them after occluder (occluder uses renderOrder -1/0), so set > 0
-  this.ring3DPurple.renderOrder = 1;
-  this.ring3DCyan.renderOrder = 1;
+    // Render order: keep them after occluder (occluder uses renderOrder -1/0), so set > 0
+    this.ring3DPurple.children.forEach(mesh => mesh.renderOrder = 1);
+    this.ring3DCyan.children.forEach(mesh => mesh.renderOrder = 1);
 
     this.ring3DGroup.add(this.ring3DPurple);
     this.ring3DGroup.add(this.ring3DCyan);
@@ -352,26 +367,45 @@ class DrawGame {
 
 
 
-    // Offset individual rings slightly so they don't perfectly overlap
-    this.ring3DPurple.position.set(0, 0, 0);
-    this.ring3DCyan.position.set(0, 0, 0);
+    // Reset ring X and Z positions - but preserve Y for animation
+    if (this.ring3DPurple && this.ring3DPurple.position) {
+      this.ring3DPurple.position.x = 0;
+      this.ring3DPurple.position.z = 0;
+      // Don't reset Y - let animation handle it
+    }
+    if (this.ring3DCyan && this.ring3DCyan.position) {
+      this.ring3DCyan.position.x = 0;
+      this.ring3DCyan.position.z = 0;
+      // Don't reset Y - let animation handle it
+    }
 
     // Scale rings to match face tracking exactly
     // Use actual face radius for proportional scaling that follows face size
-  const scaleBase = Math.max(0.35, radius * 1.15);
+    const scaleBase = Math.max(0.35, radius * 1.15);
 
-  // Apply configurable overall 3D size multiplier
-  // Ensure non-overlap by biasing Purple bigger and Cyan smaller
-  const purpleScale = scaleBase * this.RING_WIDTH_SCALE * this.RING_SCALE_MULT * 1.06;
-  const cyanScale = scaleBase * (this.RING_WIDTH_SCALE * 0.96) * this.RING_SCALE_MULT;
-  this.ring3DPurple.scale.setScalar(purpleScale);
-  this.ring3DCyan.scale.setScalar(cyanScale);
+    // Apply configurable overall 3D size multiplier
+    // Ensure non-overlap by biasing Purple bigger and Cyan smaller
+    const purpleScale = scaleBase * this.RING_WIDTH_SCALE * this.RING_SCALE_MULT * 1.06;
+    const cyanScale = scaleBase * (this.RING_WIDTH_SCALE * 0.96) * this.RING_SCALE_MULT;
+    
+    if (this.ring3DPurple && this.ring3DPurple.scale) {
+      this.ring3DPurple.scale.setScalar(purpleScale);
+    }
+    if (this.ring3DCyan && this.ring3DCyan.scale) {
+      this.ring3DCyan.scale.setScalar(cyanScale);
+    }
 
-  // Slightly offset rings in local Z to create parallax depth (one sits a bit further back)
-  // Keep separation and also add slight Y bias to make overlap visually impossible
-  const zSep = this.RING_Z_SEPARATION * scaleBase;
-  this.ring3DPurple.position.set(0, 0.01 * scaleBase, -zSep);
-  this.ring3DCyan.position.set(0, -0.01 * scaleBase, zSep);
+    // Slightly offset rings in local Z to create parallax depth (one sits a bit further back)
+    // Keep separation and also add slight Y bias to make overlap visually impossible
+    const zSep = this.RING_Z_SEPARATION * scaleBase;
+    if (this.ring3DPurple && this.ring3DPurple.position) {
+      // Purple ring will be positioned by animation, but we set initial Z offset
+      this.ring3DPurple.position.z = -zSep * 0.5;
+    }
+    if (this.ring3DCyan && this.ring3DCyan.position) {
+      // Cyan ring will be positioned by animation, but we set initial Z offset
+      this.ring3DCyan.position.z = zSep * 0.5;
+    }
 
     this.set3DRingsVisible(true);
   }
@@ -432,34 +466,35 @@ class DrawGame {
         } catch (e) {}
       }
 
-      // Animate 3D rings if present
+      // Animate 3D rings if present - usando el estilo de refearing.ts
       if (this.ring3DGroup && window.THREE) {
         try {
           const THREE = window.THREE;
-          // Animate Z with back-and-forth (sinusoidal) around base value
-          const zAmp = (this.RING_AUTO_ROT_Z_AMP_DEG || 7) * Math.PI / 180; // 7° default
-          const zFreq = (this.RING_AUTO_ROT_Z_FREQ || 0.35); // Hz
-          const zBase = (this.RING_ROT_Z_BASE_RAD || 0);
-          // Purple (Z rotates only with base + back-and-forth osc)
+          
           if (this.ring3DPurple) {
-            const baseP = (this.RING_ANGLE_BASE + (this.RING_ANGLE_DELTA / 2)) * (Math.PI / 180);
-            const animBob = Math.sin(2 * Math.PI * bobFreq * t + phasePurple) * (bobAmp * 0.01); // convert px -> world approx
-            // Apply animated Z parameter directly (back-and-forth)
-            const zOscPurple = this.RING_AUTO_ROT_Z_ENABLED ? (zAmp * Math.sin(2 * Math.PI * zFreq * t)) : 0;
-            const zAnimPurple = zBase + zOscPurple;
-            this.ring3DPurple.rotation.z = baseP + zAnimPurple;
-            this.ring3DPurple.position.y = animBob * 0.5;
+            // Movimiento orbital (rotación del pivote) - como en refearing.ts
+            this.ring3DPurple.rotation.y = t * 0.3;
+            
+            // Movimiento de rotación sobre sí mismos (rotación de los anillos internos)
+            this.ring3DPurple.children.forEach(ring => {
+              ring.rotation.z = t * 0.5;
+            });
+            
+            // Movimiento vertical suave (subir y bajar) - muy sutil como en refearing.ts
+            this.ring3DPurple.position.y = Math.sin(t * 0.7) * 0.08;
           }
 
-          // Cyan (Z rotates only with base + back-and-forth osc + phase offset)
           if (this.ring3DCyan) {
-            const baseC = (this.RING_ANGLE_BASE - (this.RING_ANGLE_DELTA / 2)) * (Math.PI / 180);
-            const animBob = Math.sin(2 * Math.PI * bobFreq * t + phaseCyan) * (bobAmp * 0.009);
-            // Use the same back-and-forth Z with additional phase offset (de-phased vs purple)
-            const zOscCyan = this.RING_AUTO_ROT_Z_ENABLED ? (zAmp * Math.sin(2 * Math.PI * zFreq * t + (this.RING_AUTO_ROT_Z_PHASE || 0))) : 0;
-            const zAnimCyan = zBase + zOscCyan;
-            this.ring3DCyan.rotation.z = baseC + this.RING_CYAN_ROT_Z_OFFSET + this.RING_INDIVIDUAL_ROT_OFFSET + zAnimCyan;
-            this.ring3DCyan.position.y = animBob * 0.5;
+            // Movimiento orbital con velocidad ligeramente diferente
+            this.ring3DCyan.rotation.y = t * 0.25;
+            
+            // Rotación sobre sí mismo con velocidad diferente
+            this.ring3DCyan.children.forEach(ring => {
+              ring.rotation.z = t * 0.4;
+            });
+            
+            // Movimiento vertical desfasado usando cos - muy sutil como en refearing.ts
+            this.ring3DCyan.position.y = Math.cos(t * 0.5) * 0.08;
           }
         } catch (e) {
           // swallow animation errors
