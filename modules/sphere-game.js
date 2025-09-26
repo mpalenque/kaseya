@@ -911,16 +911,11 @@ class SphereGame {
         isGitHubPages: isGitHubPages,
         forceServerLoad: forceServerLoad
       });
-      
-      // 1) If a global STATIC_SPHERE_CONFIG exists, use it immediately (no fetch)
-      if (window.STATIC_SPHERE_CONFIG && Array.isArray(window.STATIC_SPHERE_CONFIG.spheres) && window.STATIC_SPHERE_CONFIG.spheres.length > 0) {
-        this.sphereConfigs = window.STATIC_SPHERE_CONFIG;
-        this.defaultConfig = false;
-        console.log('[SphereGame] ✅ Using STATIC_SPHERE_CONFIG:', this.sphereConfigs.spheres.length, 'spheres');
-        this.applyConfigIfActive();
-        this.configLoaded = true;
-        return;
-      }
+
+      // NOTE on precedence:
+      // - Try to fetch sphere-config.json first (works on GitHub Pages and locally)
+      // - Fall back to STATIC_SPHERE_CONFIG only if fetch is unavailable or invalid
+      // - LocalStorage is only used when not forcing server load
       
       if (!forceServerLoad) {
         // Try to load from localStorage first (for immediate use)
@@ -946,7 +941,7 @@ class SphereGame {
         console.log('[SphereGame] Forcing server load (GitHub Pages or ?forceServer)');
       }
 
-  // 2) Try to fetch from server (local dev or other hosting). On GitHub Pages this will still work if file exists.
+  // 1) Try to fetch from server (local dev or other hosting). On GitHub Pages this will still work if file exists.
       const cacheBuster = Date.now();
       const configUrl = `sphere-config.json?v=${cacheBuster}`;
       console.log('[SphereGame] Fetching static config file:', configUrl);
@@ -983,6 +978,16 @@ class SphereGame {
         }
       } else {
         console.warn('[SphereGame] Server fetch failed:', response.status, response.statusText);
+      }
+
+      // 2) Fall back to STATIC_SPHERE_CONFIG if available (useful on GitHub Pages)
+      if (window.STATIC_SPHERE_CONFIG && Array.isArray(window.STATIC_SPHERE_CONFIG.spheres) && window.STATIC_SPHERE_CONFIG.spheres.length > 0) {
+        this.sphereConfigs = window.STATIC_SPHERE_CONFIG;
+        this.defaultConfig = false;
+        console.log('[SphereGame] ✅ Using STATIC_SPHERE_CONFIG fallback:', this.sphereConfigs.spheres.length, 'spheres');
+        this.applyConfigIfActive();
+        this.configLoaded = true;
+        return;
       }
       
   // 3) If we get here, use embedded config as last resort
