@@ -240,6 +240,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  /* track recorder size so press-indicator can align to its edge */
+  --rec-size: 60px; /* default; mirrors #recorder-button */
 }
 
 .progress-container {
@@ -288,7 +290,7 @@ body {
   opacity: 1;
 }
 
-#recorder-button {
+ #recorder-button {
   width: 60px;
   height: 60px;
   border-radius: 50%;
@@ -322,10 +324,9 @@ body {
 /* Press indicator image */
 .press-indicator {
   position: absolute;
-  top: -21px;
-  /* use a base right offset and an additional translateX offset so we can adjust per-device without clipping */
-  --press-offset: -35px; /* base offset from the right edge */
-  right: var(--press-offset);
+  /* align the left edge of the image with the right edge of the recorder button */
+  left: calc(50% + (var(--rec-size) / 2));
+  top: -21px; /* keep the original vertical offset relative to container */
   width: 59px;
   height: auto;
   object-fit: contain;
@@ -333,10 +334,9 @@ body {
   z-index: 4;
   opacity: 0;
   transition: opacity 0.3s ease;
-  /* apply pulse while preserving translateX offset by animating scale only */
   animation: subtle-pulse 2s ease-in-out infinite;
-  -webkit-transform-origin: center center;
-  transform-origin: center center;
+  -webkit-transform-origin: left center;
+  transform-origin: left center;
 }
 
 /* Show press indicator only in draw mode */
@@ -852,6 +852,9 @@ body {
     width: 55px;
     height: 55px;
   }
+
+  /* mirror the recorder size for alignment calculations */
+  .recorder-container { --rec-size: 55px; }
   
   .progress-container {
     width: 75px;
@@ -1179,6 +1182,7 @@ body {
 
   #recorder-button { width: 70px; height: 70px; }
   .progress-container { width: 95px; height: 95px; }
+  .recorder-container { --rec-size: 70px; }
 
   /* Larger word display on desktop */
   .word-text { font-size: 3.2rem; padding: 28px 48px; }
