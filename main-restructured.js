@@ -107,7 +107,7 @@ class KaseyaApp {
     
     // Initialize Sphere Game (after videoCapture so we can pass it)
     this.sphereGame = new SphereGame();
-    this.sphereGame.init(this.faceTracker, this.videoCapture);
+    await this.sphereGame.init(this.faceTracker, this.videoCapture);
     
     // Connect sphereGame to videoCapture
     this.videoCapture.sphereGame = this.sphereGame;

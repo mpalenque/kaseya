@@ -117,17 +117,16 @@ class VideoCapture {
     compositeCanvas.height = window.innerHeight;
     const compositeCtx = compositeCanvas.getContext('2d');
     
-    // For photos, we need to flip horizontally to create mirror effect
-    compositeCtx.save();
-    compositeCtx.scale(-1, 1);
-    compositeCtx.translate(-compositeCanvas.width, 0);
-    
-    // Draw webcam video covering the full viewport (now flipped)
+    // Draw webcam video with mirror effect for photos
     if (this.webcamEl.videoWidth) {
+      compositeCtx.save();
+      compositeCtx.scale(-1, 1);
+      compositeCtx.translate(-compositeCanvas.width, 0);
       this.drawWebcamCover(compositeCtx, this.webcamEl, compositeCanvas.width, compositeCanvas.height);
+      compositeCtx.restore();
     }
     
-    // Capture and draw 3D spheres if active (now flipped)
+    // Capture and draw 3D spheres if active (in normal orientation)
     if (this.sphereGame && this.sphereGame.isActive && this.sphereGame.renderer) {
       try {
         // Ensure renderer is the right size
@@ -139,7 +138,7 @@ class VideoCapture {
         // Get the WebGL canvas content
         const sphereCanvas = this.sphereGame.renderer.domElement;
         
-        // Draw at exact same size and position
+        // Draw spheres in normal orientation (not flipped)
         compositeCtx.drawImage(
           sphereCanvas, 
           0, 0, sphereCanvas.width, sphereCanvas.height,  // source
@@ -157,16 +156,21 @@ class VideoCapture {
       }
     }
     
-    // Draw violet top gradient (now flipped)
+    // Draw violet top gradient with mirror effect
+    compositeCtx.save();
+    compositeCtx.scale(-1, 1);
+    compositeCtx.translate(-compositeCanvas.width, 0);
     this.drawTopGradient(compositeCtx, compositeCanvas.width, compositeCanvas.height);
-    
-    // Draw word text if visible and not in sphere mode (now flipped)
-    if (this.drawGame && (!this.sphereGame || !this.sphereGame.isActive) && this.drawGame.permanentWordElement && this.drawGame.permanentWordElement.style.opacity !== '0') {
-      this.drawWordOnCanvas(compositeCtx, compositeCanvas.width, compositeCanvas.height);
-    }
-    
-    // Restore context before drawing footer (footer should NOT be flipped)
     compositeCtx.restore();
+    
+    // Draw word text if visible and not in sphere mode (with mirror effect)
+    if (this.drawGame && (!this.sphereGame || !this.sphereGame.isActive) && this.drawGame.permanentWordElement && this.drawGame.permanentWordElement.style.opacity !== '0') {
+      compositeCtx.save();
+      compositeCtx.scale(-1, 1);
+      compositeCtx.translate(-compositeCanvas.width, 0);
+      this.drawWordOnCanvas(compositeCtx, compositeCanvas.width, compositeCanvas.height);
+      compositeCtx.restore();
+    }
     
     // Draw footer in normal orientation
     this.drawFooterOnCanvas(compositeCtx, compositeCanvas.width, compositeCanvas.height);

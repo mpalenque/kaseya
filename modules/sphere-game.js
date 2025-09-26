@@ -43,12 +43,12 @@ class SphereGame {
     this.spheresGroup = null;
   }
 
-  init(faceTracker, videoCapture = null) {
+  async init(faceTracker, videoCapture = null) {
     this.faceTracker = faceTracker;
     this.videoCapture = videoCapture;
     this.createSphereContainer();
     this.setup3DScene();
-    this.setupConfigSystem();
+    await this.setupConfigSystem();
     this.setupPhotoCapture();
   }
 
@@ -858,9 +858,9 @@ class SphereGame {
   }
 
   // Configuration System
-  setupConfigSystem() {
+  async setupConfigSystem() {
     // Load existing config on startup
-    this.loadSphereConfig();
+    await this.loadSphereConfig();
     
     // Setup Ctrl+S hotkey
     document.addEventListener('keydown', (e) => {
@@ -876,24 +876,40 @@ class SphereGame {
       // Try to load from localStorage first (for immediate use)
       const localConfig = localStorage.getItem('sphereConfig');
       if (localConfig) {
-        this.sphereConfigs = JSON.parse(localConfig);
-        this.defaultConfig = false;
-        return;
+        try {
+          this.sphereConfigs = JSON.parse(localConfig);
+          // Validate that it has spheres
+          if (this.sphereConfigs.spheres && this.sphereConfigs.spheres.length > 0) {
+            this.defaultConfig = false;
+            console.log('Loaded sphere config from localStorage with', this.sphereConfigs.spheres.length, 'spheres');
+            return;
+          }
+        } catch (e) {
+          console.warn('Invalid localStorage config, trying server');
+        }
       }
 
       // Try to fetch from server
       const response = await fetch('sphere-config.json');
       if (response.ok) {
-        this.sphereConfigs = await response.json();
-        this.defaultConfig = false;
-        // Cache in localStorage
-        localStorage.setItem('sphereConfig', JSON.stringify(this.sphereConfigs));
-      } else {
-        this.defaultConfig = true;
-        this.sphereConfigs = null;
+        const serverConfig = await response.json();
+        // Validate server config
+        if (serverConfig.spheres && serverConfig.spheres.length > 0) {
+          this.sphereConfigs = serverConfig;
+          this.defaultConfig = false;
+          // Cache in localStorage
+          localStorage.setItem('sphereConfig', JSON.stringify(this.sphereConfigs));
+          console.log('Loaded sphere config from server with', serverConfig.spheres.length, 'spheres');
+          return;
+        }
       }
+      
+      // If we get here, neither localStorage nor server had valid config
+      console.log('No valid sphere config found, using algorithmic defaults');
+      this.defaultConfig = true;
+      this.sphereConfigs = null;
     } catch (e) {
-      console.log('No sphere config found, using defaults');
+      console.log('Error loading sphere config, using algorithmic defaults:', e);
       this.defaultConfig = true;
       this.sphereConfigs = null;
     }
@@ -1252,6 +1268,8 @@ class SphereGame {
 
   createSpheresFromConfig() {
     if (!this.sphereConfigs || !this.sphereConfigs.spheres) return;
+    
+    console.log('Creating spheres from config:', this.sphereConfigs.spheres.length, 'spheres');
 
     this.sphereConfigs.spheres.forEach((config, index) => {
       const { position, radius, color } = config;
