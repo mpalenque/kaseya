@@ -323,7 +323,9 @@ body {
 .press-indicator {
   position: absolute;
   top: -21px;
-  right: -35px;
+  /* use a base right offset and an additional translateX offset so we can adjust per-device without clipping */
+  --press-offset: -35px; /* base offset from the right edge */
+  right: var(--press-offset);
   width: 59px;
   height: auto;
   object-fit: contain;
@@ -331,7 +333,10 @@ body {
   z-index: 4;
   opacity: 0;
   transition: opacity 0.3s ease;
+  /* apply pulse while preserving translateX offset by animating scale only */
   animation: subtle-pulse 2s ease-in-out infinite;
+  -webkit-transform-origin: center center;
+  transform-origin: center center;
 }
 
 /* Show press indicator only in draw mode */
@@ -345,8 +350,17 @@ body {
 }
 
 @keyframes subtle-pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.05); }
+  0%, 100% { transform: scale(1) translateX(0); }
+  50% { transform: scale(1.05) translateX(0); }
+}
+
+/* iPhone / small screens: reduce offset so the image isn't pushed offscreen by safe-area insets */
+@media (max-width: 420px), (max-device-width: 420px) {
+  .press-indicator {
+    --press-offset: -18px; /* smaller negative offset on narrow screens */
+    width: 56px; /* slightly smaller on small screens */
+    z-index: 30; /* bring above overlays */
+  }
 }
 
 /* Flash effect */
