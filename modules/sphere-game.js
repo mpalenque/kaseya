@@ -1059,8 +1059,9 @@ class SphereGame {
           const nx = dx / (dist || 1);
           const ny = dy / (dist || 1);
           const overlap = (desired - dist);
-          // Very gentle push to spread, scale down strongly so it's subtle
-          const push = overlap * 0.08;
+          // Very gentle push to spread, fps-normalized and reduced to avoid jitter
+          const dtNorm = Math.min(2, (dt || 0.016) * 60);
+          const push = overlap * 0.04 * dtNorm;
           sphereA.position.x -= nx * push;
           sphereA.position.y -= ny * push;
           sphereA.position.z = facePlaneZ;
@@ -1139,17 +1140,17 @@ class SphereGame {
       sphere.position.z = facePlaneZ;
     }
 
-    // After inter-sphere resolution and face clamping, apply a gentle smoothing for spheres
-    // that bumped other spheres (but were not face-clamped this frame), to reduce sharp jumps
+    // Final dt-based low-pass smoothing to eliminate stutter (skip face-clamped)
     for (let i = 0; i < this.followers.length; i++) {
       const s = this.followers[i];
-      if (s.userData.bumped && !s.userData.clampedFace) {
-        const prev = prevPositions[i];
-        // Stronger easing towards the new position from the previous frame
-        s.position.x = prev.x + (s.position.x - prev.x) * 0.5;
-        s.position.y = prev.y + (s.position.y - prev.y) * 0.5;
-        // Z remains locked already
-      }
+      if (s.userData.clampedFace) continue;
+      const prev = prevPositions[i];
+      // Use lower rate when bumped (heavier smoothing), higher otherwise
+      const rate = s.userData.bumped ? 8 : 18; // Hz
+      const k = 1 - Math.exp(-(rate) * Math.max(0.001, dt || 0.016));
+      s.position.x = prev.x + (s.position.x - prev.x) * k;
+      s.position.y = prev.y + (s.position.y - prev.y) * k;
+      s.position.z = facePlaneZ;
     }
   }
 
