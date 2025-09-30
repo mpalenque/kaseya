@@ -768,14 +768,19 @@ class SphereGame {
       }
 
       // Bring sphere position 10% closer to face center in XY plane
+      // Skip this attraction when displaced or within repel cooldown to avoid pulling into the face box
       try {
-        const cx = faceColliderCenter.x;
-        const cy = faceColliderCenter.y;
-        const f = this.SPHERES_CLOSENESS_FACTOR;
-        if (typeof f === 'number' && f > 0 && f < 1) {
-          this.tmp.x = cx + (this.tmp.x - cx) * f;
-          this.tmp.y = cy + (this.tmp.y - cy) * f;
-          // Z stays locked to facePlaneZ already
+        const repelUntil = sphere.userData.repelUntil || 0;
+        const isRepelled = now < repelUntil || sphere.userData.isDisplaced;
+        if (!isRepelled) {
+          const cx = faceColliderCenter.x;
+          const cy = faceColliderCenter.y;
+          const f = this.SPHERES_CLOSENESS_FACTOR;
+          if (typeof f === 'number' && f > 0 && f < 1) {
+            this.tmp.x = cx + (this.tmp.x - cx) * f;
+            this.tmp.y = cy + (this.tmp.y - cy) * f;
+            // Z stays locked to facePlaneZ already
+          }
         }
       } catch(_) {}
       
@@ -932,7 +937,7 @@ class SphereGame {
     }
 
   // Inter-sphere collision resolution - softer
-    for (let iter = 0; iter < 3; iter++) { // Fewer, softer iterations
+    for (let iter = 0; iter < 3; iter++) { // Iterative soft separation
       for (let i = 0; i < this.followers.length; i++) {
         const sphereA = this.followers[i]; 
         const radiusA = sphereA.userData.radius;
@@ -945,7 +950,7 @@ class SphereGame {
           const dy = sphereB.position.y - sphereA.position.y; 
           // With Z locked, use XY distance only
           const distSq = dx*dx + dy*dy; 
-          const minDist = radiusA + radiusB + 0.02; // Slightly more padding
+          const minDist = radiusA + radiusB + 0.04; // Increased padding to ensure visible gap
           
           if (distSq > 0) { 
             const dist = Math.sqrt(distSq); 
@@ -954,18 +959,18 @@ class SphereGame {
               const nx = dx / (dist || 1); 
               const ny = dy / (dist || 1); 
               
-              // Softer stiffness with more damping
-              const baseStiffness = 0.08;
-              const factor = baseStiffness * (1.0 - iter * 0.2);
-              const push = overlap * 0.5 * Math.max(0.03, factor); 
+              // Stiffer resolution with moderate damping
+              const baseStiffness = 0.12;
+              const factor = baseStiffness * (1.0 - iter * 0.25);
+              const push = overlap * 0.5 * Math.max(0.05, factor); 
               
               const pushAx = -nx * push; 
               const pushAy = -ny * push; 
               const pushBx = nx * push; 
               const pushBy = ny * push; 
               
-              // Stronger damping for gentler movement
-              const damping = 0.2; // less push per iteration
+              // Moderate damping: separate faster to avoid visual sticking
+              const damping = 0.6;
               sphereA.position.x += pushAx * damping; 
               sphereA.position.y += pushAy * damping; 
               // Keep Z fixed
@@ -984,7 +989,35 @@ class SphereGame {
       }
     }
 
-    // Final enforcement: ensure spheres are outside the face box/OBB with added margin (soft)
+    // Final hard clamp to ensure no touching: enforce minimum gap strictly
+    for (let i = 0; i < this.followers.length; i++) {
+      const sphereA = this.followers[i];
+      const radiusA = sphereA.userData.radius;
+      for (let j = i + 1; j < this.followers.length; j++) {
+        const sphereB = this.followers[j];
+        const radiusB = sphereB.userData.radius;
+        const dx = sphereB.position.x - sphereA.position.x;
+        const dy = sphereB.position.y - sphereA.position.y;
+        const distSq = dx*dx + dy*dy;
+        if (distSq <= 0) continue;
+        const dist = Math.sqrt(distSq);
+        const minDistHard = radiusA + radiusB + 0.03; // keep a visible gap
+        if (dist < minDistHard) {
+          const nx = dx / (dist || 1);
+          const ny = dy / (dist || 1);
+          const correction = (minDistHard - dist) * 0.5;
+          // Move both spheres instantly away to satisfy the constraint
+          sphereA.position.x -= nx * correction;
+          sphereA.position.y -= ny * correction;
+          sphereA.position.z = facePlaneZ;
+          sphereB.position.x += nx * correction;
+          sphereB.position.y += ny * correction;
+          sphereB.position.z = facePlaneZ;
+        }
+      }
+    }
+
+    // Final enforcement: ensure spheres are strictly outside the face box/OBB with added margin (hard clamp)
     for (const sphere of this.followers) {
       const sphereRadius = sphere.userData.radius;
       if (faceQuat && invFaceQuat) {
@@ -992,7 +1025,7 @@ class SphereGame {
         const inX = (local.x > -hx - sphereRadius) && (local.x < hx + sphereRadius);
         const inY = (local.y > -hy - sphereRadius) && (local.y < hy + sphereRadius);
         if (inX && inY) {
-          const margin = 0.04;
+          const margin = 0.06;
           const gapX = hx - Math.abs(local.x);
           const gapY = hy - Math.abs(local.y);
           if (gapX < gapY) {
@@ -1001,11 +1034,17 @@ class SphereGame {
             local.y = (local.y >= 0 ? hy + sphereRadius + margin : -hy - sphereRadius - margin);
           }
           const world = local.applyQuaternion(faceQuat).add(new THREE.Vector3(faceColliderCenter.x, faceColliderCenter.y, 0));
-          const resolveAlpha = 0.12;
-          sphere.position.x = sphere.position.x + (world.x - sphere.position.x) * resolveAlpha;
-          sphere.position.y = sphere.position.y + (world.y - sphere.position.y) * resolveAlpha;
+          // Hard clamp instantly outside the face OBB
+          sphere.position.x = world.x;
+          sphere.position.y = world.y;
+          sphere.position.z = facePlaneZ;
           sphere.userData.isDisplaced = true;
-          sphere.userData.displacedPosition = { x: sphere.position.x, y: sphere.position.y, z: facePlaneZ };
+          sphere.userData.lastBoundary = { x: world.x, y: world.y, z: facePlaneZ };
+          sphere.userData.repelUntil = performance.now() + 350; // brief cooldown to avoid re-entry
+          const mem = (sphere.userData.displacedPosition ||= { x: sphere.position.x, y: sphere.position.y, z: facePlaneZ });
+          mem.x = world.x;
+          mem.y = world.y;
+          mem.z = facePlaneZ;
         }
       } else {
         const boxLeft = faceColliderCenter.x - hx;
@@ -1019,18 +1058,24 @@ class SphereGame {
           const distToTop = Math.abs(sphere.position.y - boxTop);
           const distToBottom = Math.abs(sphere.position.y - boxBottom);
           const minDist = Math.min(distToLeft, distToRight, distToTop, distToBottom);
-          const margin = 0.04;
+          const margin = 0.06;
           let targetX = sphere.position.x;
           let targetY = sphere.position.y;
           if (minDist === distToLeft) targetX = boxLeft - sphereRadius - margin;
           else if (minDist === distToRight) targetX = boxRight + sphereRadius + margin;
           if (minDist === distToTop) targetY = boxTop + sphereRadius + margin;
           else if (minDist === distToBottom) targetY = boxBottom - sphereRadius - margin;
-          const resolveAlpha = 0.12;
-          sphere.position.x = sphere.position.x + (targetX - sphere.position.x) * resolveAlpha;
-          sphere.position.y = sphere.position.y + (targetY - sphere.position.y) * resolveAlpha;
+          // Hard clamp instantly outside the AABB
+          sphere.position.x = targetX;
+          sphere.position.y = targetY;
+          sphere.position.z = facePlaneZ;
           sphere.userData.isDisplaced = true;
-          sphere.userData.displacedPosition = { x: sphere.position.x, y: sphere.position.y, z: facePlaneZ };
+          sphere.userData.lastBoundary = { x: targetX, y: targetY, z: facePlaneZ };
+          sphere.userData.repelUntil = performance.now() + 350;
+          const mem = (sphere.userData.displacedPosition ||= { x: sphere.position.x, y: sphere.position.y, z: facePlaneZ });
+          mem.x = targetX;
+          mem.y = targetY;
+          mem.z = facePlaneZ;
         }
       }
       
@@ -1187,7 +1232,7 @@ class SphereGame {
         {"id":5,"position":{"x":-0.86,"y":-0.38,"z":3.06},"radius":0.05,"baseRadius":3.2,"color":"#26147A"},
         {"id":6,"position":{"x":-0.56,"y":1.04,"z":3.06},"radius":0.14,"baseRadius":3.28,"color":"#8A2BE2"},
         {"id":7,"position":{"x":-0.17,"y":-1.12,"z":3.06},"radius":0.4,"baseRadius":3.26,"color":"#B794F4"},
-        {"id":8,"position":{"x":0.89,"y":-0.48,"z":3.06},"radius":0.24,"baseRadius":3.22,"color":"#B794F4"},
+  {"id":8,"position":{"x":0.89,"y":-0.48,"z":3.06},"radius":0.05,"baseRadius":3.22,"color":"#B794F4"},
   {"id":9,"position":{"x":1.52,"y":-0.57,"z":3.06},"radius":0.05,"baseRadius":3.46,"color":"#B794F4"},
   {"id":10,"position":{"x":-1.09,"y":1.23,"z":3.06},"radius":0.05,"baseRadius":3.47,"color":"#00FFFF"},
         {"id":11,"position":{"x":1.05,"y":1.09,"z":3.06},"radius":0.05,"baseRadius":3.41,"color":"#B794F4"},
