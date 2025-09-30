@@ -29,8 +29,8 @@ class SphereGame {
   this.faceCollisionExtra = 0.035; // extra radial clearance so the sphere volume never intersects
   // Face box debug/collider scales (relative to radius)
   // Defaults changed to larger, user-tunable values (units are multipliers applied to face radius)
-  this.faceBoxScaleX = 200; // width multiplier (requested)
-  this.faceBoxScaleY = 200; // height multiplier (requested)
+  this.faceBoxScaleX = 160; // width multiplier (requested ~160)
+  this.faceBoxScaleY = 210; // height multiplier (requested ~210)
   this.faceBoxScaleZ = 1.0; // depth multiplier
   // Debug box visibility (collision still works even if hidden)
   this.showFaceDebug = false;
@@ -57,6 +57,9 @@ class SphereGame {
     this.spheresGroup = null;
   // Desired extra gap between spheres so they don't appear stuck together
   this.interSpherePadding = 0.06; // was ~0.03 previously
+  // Bring side spheres vertically closer to center so they are visible on edges
+  this.SIDE_Y_COMPRESS_START = 1.6; // start compressing Y beyond this |x-cx|
+  this.SIDE_Y_COMPRESS_MAX = 0.7;   // when far on X, scale Y delta by this factor (0.7 = 30% closer)
     // Bring all spheres 10% closer to the face center (applied in update)
     // 1.0 = no change, 0.9 = 10% closer relative to face center each frame
     this.SPHERES_CLOSENESS_FACTOR = 0.9;
@@ -805,6 +808,15 @@ class SphereGame {
             this.tmp.x = cx + (this.tmp.x - cx) * f;
             this.tmp.y = cy + (this.tmp.y - cy) * f;
             // Z stays locked to facePlaneZ already
+          }
+          // Additional Y compression for spheres far on X (sides) to keep them visible
+          const start = this.SIDE_Y_COMPRESS_START ?? 1.6;
+          const maxScale = this.SIDE_Y_COMPRESS_MAX ?? 0.7;
+          const sideX = Math.abs(this.tmp.x - cx);
+          if (sideX > start) {
+            const t = Math.max(0, Math.min(1, (sideX - start) / start));
+            const scale = 1 - t * (1 - maxScale);
+            this.tmp.y = cy + (this.tmp.y - cy) * scale;
           }
         }
       } catch(_) {}
