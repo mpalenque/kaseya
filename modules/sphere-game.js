@@ -863,7 +863,7 @@ class SphereGame {
         const repelUntil = sphere.userData.repelUntil || 0;
         // Only start the slow return once any explicit repel period has elapsed
         if (now > repelUntil) {
-          const returnAlpha = 0.002; // tiny lerp per frame -> very slow return
+          const returnAlpha = 0.001; // half speed return to base position
           mem.x += (basePos.x - mem.x) * returnAlpha;
           mem.y += (basePos.y - mem.y) * returnAlpha;
           // Re-center this.tmp around the gradually-moving displaced memory so the
@@ -1188,8 +1188,8 @@ class SphereGame {
         {"id":6,"position":{"x":-0.56,"y":1.04,"z":3.06},"radius":0.14,"baseRadius":3.28,"color":"#8A2BE2"},
         {"id":7,"position":{"x":-0.17,"y":-1.12,"z":3.06},"radius":0.4,"baseRadius":3.26,"color":"#B794F4"},
         {"id":8,"position":{"x":0.89,"y":-0.48,"z":3.06},"radius":0.24,"baseRadius":3.22,"color":"#B794F4"},
-        {"id":9,"position":{"x":1.52,"y":-0.57,"z":3.06},"radius":0.5,"baseRadius":3.46,"color":"#B794F4"},
-        {"id":10,"position":{"x":-1.09,"y":1.23,"z":3.06},"radius":0.2,"baseRadius":3.47,"color":"#00FFFF"},
+  {"id":9,"position":{"x":1.52,"y":-0.57,"z":3.06},"radius":0.05,"baseRadius":3.46,"color":"#B794F4"},
+  {"id":10,"position":{"x":-1.09,"y":1.23,"z":3.06},"radius":0.05,"baseRadius":3.47,"color":"#00FFFF"},
         {"id":11,"position":{"x":1.05,"y":1.09,"z":3.06},"radius":0.05,"baseRadius":3.41,"color":"#B794F4"},
         {"id":12,"position":{"x":-0.95,"y":0.14,"z":3.06},"radius":0.15,"baseRadius":3.21,"color":"#7209B7"},
         {"id":13,"position":{"x":0.99,"y":-0.11,"z":3.06},"radius":0.15,"baseRadius":3.22,"color":"#3D348B"},
