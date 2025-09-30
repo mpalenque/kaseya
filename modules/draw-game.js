@@ -1081,6 +1081,11 @@ class DrawGame {
       const inner = this.permanentWordElement && this.permanentWordElement.querySelector('.word-inner');
       if (!inner) return resolve();
       const start = performance.now();
+      // Capture state for canvas recording
+      this.rouletteState = this.rouletteState || { mode: 'idle' };
+      this.rouletteState.mode = 'shake';
+      this.rouletteState.start = start;
+      this.rouletteState.duration = durationMs;
       const originalTransition = inner.style.transition;
       const originalFilter = inner.style.filter;
       const originalTransform = inner.style.transform;
@@ -1095,6 +1100,8 @@ class DrawGame {
         const rot = Math.sin(phase * 0.8) * 1.8; // +/- 1.8deg
         inner.style.transition = 'transform 40ms linear';
         inner.style.transform = `translate(${dx}px, ${dy}px) rotate(${rot}deg)`;
+        // Mirror state for canvas draw
+        this.rouletteState.shake = { dx, dy, rot };
         if (!done) {
           requestAnimationFrame(tick);
         } else {
@@ -1102,6 +1109,7 @@ class DrawGame {
           inner.style.transition = originalTransition;
           inner.style.transform = originalTransform || '';
           inner.style.filter = originalFilter || '';
+          this.rouletteState.mode = 'idle';
           resolve();
         }
       };
@@ -1159,6 +1167,17 @@ class DrawGame {
   incoming.style.lineHeight = cs.lineHeight;
       container.appendChild(incoming);
 
+      // Init canvas capture state for scroll/blur
+      const bannerH = container.clientHeight || 120;
+      const now0 = performance.now();
+      this.rouletteState = this.rouletteState || { mode: 'idle' };
+      this.rouletteState.mode = 'scroll';
+      this.rouletteState.start = now0;
+      this.rouletteState.duration = stepMs;
+      this.rouletteState.innerText = inner.textContent || '';
+      this.rouletteState.incomingText = nextWord;
+      this.rouletteState.bannerH = bannerH;
+
       // Kick off the animation on the next frame
       requestAnimationFrame(() => {
   // Move current (inner) up but stay closer and blur/fade a bit
@@ -1186,6 +1205,10 @@ class DrawGame {
 
           // Remove the incoming temp element
           if (incoming && incoming.parentNode) incoming.parentNode.removeChild(incoming);
+          // Reset capture state
+          this.rouletteState.mode = 'idle';
+          this.rouletteState.innerText = nextWord;
+          this.rouletteState.incomingText = null;
           resolve();
         };
 
@@ -1286,6 +1309,80 @@ class DrawGame {
     ctx.stroke();
 
     ctx.restore();
+
+    // Draw text (vibration and scroll/blur) into capture
+    try {
+      const inner = this.permanentWordElement.querySelector('.word-inner');
+      if (!inner) return;
+      const cs = window.getComputedStyle(inner);
+      const textColor = cs.color || '#FFFFFF';
+      const fontSize = cs.fontSize || '48px';
+      const fontWeight = cs.fontWeight || '700';
+      const fontFamily = cs.fontFamily || 'sans-serif';
+      ctx.save();
+      // Clip to banner rect
+      const bx = (centerX - bannerW / 2) * scaleX;
+      const by = (this.smoothWordY) * scaleY;
+      const bw = bannerW * scaleX;
+      const bh = bannerH * scaleY;
+      ctx.beginPath();
+      ctx.rect(bx, by, bw, bh);
+      ctx.clip();
+
+      // Setup text style
+      ctx.font = `${fontWeight} ${fontSize} ${fontFamily}`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = textColor;
+      ctx.shadowColor = 'rgba(0,0,0,0.65)';
+      ctx.shadowBlur = 6;
+
+      const cx = centerX * scaleX;
+      const cy = (this.smoothWordY + bannerH / 2) * scaleY;
+      const now = performance.now();
+      const RS = this.rouletteState || { mode: 'idle' };
+
+      const drawOne = (text, dx, dy, rotDeg, blurPx, alpha) => {
+        ctx.save();
+        ctx.translate(cx + (dx || 0) * scaleX, cy + (dy || 0) * scaleY);
+        if (rotDeg) ctx.rotate(rotDeg * Math.PI / 180);
+        ctx.filter = blurPx ? `blur(${blurPx}px)` : 'none';
+        const oldAlpha = ctx.globalAlpha;
+        ctx.globalAlpha = (alpha != null ? alpha : 1.0) * oldAlpha;
+        ctx.fillText(text, 0, 0);
+        ctx.globalAlpha = oldAlpha;
+        ctx.restore();
+      };
+
+      if (RS.mode === 'shake') {
+        const t = Math.min(1, (now - RS.start) / RS.duration);
+        const text = inner.textContent || this.currentWord || '';
+        const { dx = 0, dy = 0, rot = 0 } = RS.shake || {};
+        drawOne(text, dx, dy, rot, 0, 1);
+      } else if (RS.mode === 'scroll' && RS.incomingText) {
+        const dur = RS.duration || 260;
+        const p = Math.max(0, Math.min(1, (now - RS.start) / dur));
+        const h = RS.bannerH || bannerH;
+        // Inner moves up -60% H with blur 0->2 and alpha 1->0.5
+        const innerText = RS.innerText || inner.textContent || '';
+        const innerDy = -0.6 * h * p;
+        const innerBlur = 2 * p;
+        const innerAlpha = 1 - 0.5 * p;
+        drawOne(innerText, 0, innerDy, 0, innerBlur, innerAlpha);
+        // Incoming moves from +60% H to 0 with blur 2->0 and alpha 0.8->1
+        const incText = RS.incomingText || '';
+        const incDy = 0.6 * h * (1 - p);
+        const incBlur = 2 * (1 - p);
+        const incAlpha = 0.8 + 0.2 * p;
+        drawOne(incText, 0, incDy, 0, incBlur, incAlpha);
+      } else {
+        // Idle: draw current word centered
+        const text = inner.textContent || this.currentWord || '';
+        drawOne(text, 0, 0, 0, 0, 1);
+      }
+
+      ctx.restore();
+    } catch (_) {}
   }
 
   setVisibility(visible) {

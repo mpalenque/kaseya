@@ -885,7 +885,7 @@ class SphereGame {
           // Smoothstep factor in [0,1] using a 0.6 world-units window
           const t = Math.max(0, Math.min(1, dist0 / 0.6));
           const smooth = t * t * (3 - 2 * t);
-          const returnAlpha = 0.001 + 0.009 * smooth; // 0.001..0.010 depending on distance
+          const returnAlpha = 0.01 + 0.09 * smooth; // 0.01..0.10 depending on distance (much faster)
           mem.x += (basePos.x - mem.x) * returnAlpha;
           mem.y += (basePos.y - mem.y) * returnAlpha;
           // Re-center this.tmp around the gradually-moving displaced memory so the
@@ -917,7 +917,7 @@ class SphereGame {
       const prevX = sphere.position.x;
       const prevY = sphere.position.y;
   // If displaced, blend much slower for extra smoothness
-  const alphaAdjusted = (sphere.userData.isDisplaced ? Math.min(alpha, 0.04) : alpha);
+  const alphaAdjusted = (sphere.userData.isDisplaced ? Math.min(alpha * 1.8, 0.18) : alpha);
   sphere.position.lerp(this.tmp, alphaAdjusted);
       // Gentle damping post-collision to reduce jitter/violence
       if (collidedThisFrame) {
