@@ -590,6 +590,21 @@ class SphereGame {
     return a + Math.random() * (b - a);
   }
 
+  // Deterministic small jitter per sphere to avoid perfect alignment on boundaries
+  getBoundaryJitter(sphere) {
+    if (sphere.userData._bj) return sphere.userData._bj;
+    const seed = (sphere.userData?.id ?? sphere.userData?.uid ?? 0) + 1;
+    const prng = (salt) => {
+      const x = Math.sin(seed * 9283 + salt * 199) * 43758.5453;
+      return x - Math.floor(x);
+    };
+    const amp = 0.12; // world units jitter amplitude
+    const jx = (prng(1) - 0.5) * amp;
+    const jy = (prng(2) - 0.5) * amp;
+    sphere.userData._bj = { jx, jy };
+    return sphere.userData._bj;
+  }
+
   checkSphereCollision(x, y, z, radius) {
     // Check collision with face area
     const distanceFromFaceCenter = Math.sqrt(x*x + y*y + (z > 0 ? z*z : 0));
@@ -811,10 +826,13 @@ class SphereGame {
           const gapX = hx - Math.abs(local.x);
           const gapY = hy - Math.abs(local.y);
           const targetLocal = local.clone();
+          const jitter = this.getBoundaryJitter(sphere);
           if (gapX < gapY) {
             targetLocal.x = (local.x >= 0 ? hx + sphereRadius + margin : -hx - sphereRadius - margin);
+            targetLocal.y += jitter.jy; // add tangential jitter to avoid alignment
           } else {
             targetLocal.y = (local.y >= 0 ? hy + sphereRadius + margin : -hy - sphereRadius - margin);
+            targetLocal.x += jitter.jx;
           }
           const worldTarget = targetLocal.applyQuaternion(faceQuat).add(new THREE.Vector3(faceColliderCenter.x, faceColliderCenter.y, 0));
           const resolveAlpha = 0.06;
@@ -825,6 +843,10 @@ class SphereGame {
           mem.x = mem.x + (this.tmp.x - mem.x) * 0.06;
           mem.y = mem.y + (this.tmp.y - mem.y) * 0.06;
           mem.z = facePlaneZ;
+          // Anchor to boundary and extend repel cooldown to prevent immediate re-entry
+          sphere.userData.lastBoundary = { x: worldTarget.x, y: worldTarget.y, z: facePlaneZ };
+          const until = performance.now() + 600;
+          sphere.userData.repelUntil = Math.max(sphere.userData.repelUntil || 0, until);
           collidedThisFrame = true;
         }
       } else {
@@ -849,10 +871,11 @@ class SphereGame {
           let targetX = desiredX;
           let targetY = desiredY;
           const margin = 0.04;
-          if (minDist === distToLeft) targetX = boxLeft - sphereRadius - margin;
-          else if (minDist === distToRight) targetX = boxRight + sphereRadius + margin;
-          if (minDist === distToTop) targetY = boxTop + sphereRadius + margin;
-          else if (minDist === distToBottom) targetY = boxBottom - sphereRadius - margin;
+          const jitter = this.getBoundaryJitter(sphere);
+          if (minDist === distToLeft) { targetX = boxLeft - sphereRadius - margin; targetY += jitter.jy; }
+          else if (minDist === distToRight) { targetX = boxRight + sphereRadius + margin; targetY += jitter.jy; }
+          if (minDist === distToTop) { targetY = boxTop + sphereRadius + margin; targetX += jitter.jx; }
+          else if (minDist === distToBottom) { targetY = boxBottom - sphereRadius - margin; targetX += jitter.jx; }
           const resolveAlpha = 0.06;
           this.tmp.x = desiredX + (targetX - desiredX) * resolveAlpha;
           this.tmp.y = desiredY + (targetY - desiredY) * resolveAlpha;
@@ -861,6 +884,10 @@ class SphereGame {
           mem.x = mem.x + (this.tmp.x - mem.x) * 0.06;
           mem.y = mem.y + (this.tmp.y - mem.y) * 0.06;
           mem.z = facePlaneZ;
+          // Anchor to boundary and extend repel cooldown to prevent immediate re-entry
+          sphere.userData.lastBoundary = { x: targetX, y: targetY, z: facePlaneZ };
+          const until = performance.now() + 600;
+          sphere.userData.repelUntil = Math.max(sphere.userData.repelUntil || 0, until);
           collidedThisFrame = true;
         }
       }
@@ -1083,10 +1110,13 @@ class SphereGame {
           const margin = 0.05;
           const gapX = hx - Math.abs(local.x);
           const gapY = hy - Math.abs(local.y);
+          const jitter = this.getBoundaryJitter(sphere);
           if (gapX < gapY) {
             local.x = (local.x >= 0 ? hx + sphereRadius + margin : -hx - sphereRadius - margin);
+            local.y += jitter.jy;
           } else {
             local.y = (local.y >= 0 ? hy + sphereRadius + margin : -hy - sphereRadius - margin);
+            local.x += jitter.jx;
           }
           const world = local.applyQuaternion(faceQuat).add(new THREE.Vector3(faceColliderCenter.x, faceColliderCenter.y, 0));
           // Hard clamp instantly outside the face OBB
@@ -1095,7 +1125,7 @@ class SphereGame {
           sphere.position.z = facePlaneZ;
           sphere.userData.isDisplaced = true;
           sphere.userData.lastBoundary = { x: world.x, y: world.y, z: facePlaneZ };
-          sphere.userData.repelUntil = performance.now() + 200; // shorter cooldown to start returning sooner
+          sphere.userData.repelUntil = performance.now() + 600; // longer cooldown to avoid immediate return
           const mem = (sphere.userData.displacedPosition ||= { x: sphere.position.x, y: sphere.position.y, z: facePlaneZ });
           mem.x = world.x;
           mem.y = world.y;
@@ -1117,17 +1147,18 @@ class SphereGame {
           const margin = 0.05;
           let targetX = sphere.position.x;
           let targetY = sphere.position.y;
-          if (minDist === distToLeft) targetX = boxLeft - sphereRadius - margin;
-          else if (minDist === distToRight) targetX = boxRight + sphereRadius + margin;
-          if (minDist === distToTop) targetY = boxTop + sphereRadius + margin;
-          else if (minDist === distToBottom) targetY = boxBottom - sphereRadius - margin;
+          const jitter = this.getBoundaryJitter(sphere);
+          if (minDist === distToLeft) { targetX = boxLeft - sphereRadius - margin; targetY += jitter.jy; }
+          else if (minDist === distToRight) { targetX = boxRight + sphereRadius + margin; targetY += jitter.jy; }
+          if (minDist === distToTop) { targetY = boxTop + sphereRadius + margin; targetX += jitter.jx; }
+          else if (minDist === distToBottom) { targetY = boxBottom - sphereRadius - margin; targetX += jitter.jx; }
           // Hard clamp instantly outside the AABB
           sphere.position.x = targetX;
           sphere.position.y = targetY;
           sphere.position.z = facePlaneZ;
           sphere.userData.isDisplaced = true;
           sphere.userData.lastBoundary = { x: targetX, y: targetY, z: facePlaneZ };
-          sphere.userData.repelUntil = performance.now() + 200;
+          sphere.userData.repelUntil = performance.now() + 600;
           const mem = (sphere.userData.displacedPosition ||= { x: sphere.position.x, y: sphere.position.y, z: facePlaneZ });
           mem.x = targetX;
           mem.y = targetY;
