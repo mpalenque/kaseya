@@ -720,6 +720,14 @@ class SphereGame {
 
   const now = performance.now();
   let collidedThisFrame = false;
+  // Prepare per-sphere flags and capture previous positions for smoothing
+  const prevPositions = new Array(this.followers.length);
+  for (let i = 0; i < this.followers.length; i++) {
+    const s = this.followers[i];
+    prevPositions[i] = { x: s.position.x, y: s.position.y };
+    s.userData.bumped = false; // inter-sphere collision this frame
+    s.userData.clampedFace = false; // clamped to face box this frame
+  }
     // Update sphere positions with orbital motion
     for (const sphere of this.followers) {
       const orbit = sphere.userData.orbit; 
@@ -978,6 +986,9 @@ class SphereGame {
               sphereB.position.x += pushBx * damping; 
               sphereB.position.y += pushBy * damping; 
               sphereB.position.z = facePlaneZ; 
+              // Mark as bumped for smoothing pass
+              sphereA.userData.bumped = true;
+              sphereB.userData.bumped = true;
               
               // Face plane constraint - removed to allow spheres to move further forward
               // const faceZ = headPosSmoothed.z + this.facePlaneMargin; 
@@ -1013,6 +1024,9 @@ class SphereGame {
           sphereB.position.x += nx * correction;
           sphereB.position.y += ny * correction;
           sphereB.position.z = facePlaneZ;
+          // Mark as bumped for smoothing pass
+          sphereA.userData.bumped = true;
+          sphereB.userData.bumped = true;
         }
       }
     }
@@ -1045,6 +1059,7 @@ class SphereGame {
           mem.x = world.x;
           mem.y = world.y;
           mem.z = facePlaneZ;
+          sphere.userData.clampedFace = true;
         }
       } else {
         const boxLeft = faceColliderCenter.x - hx;
@@ -1076,11 +1091,25 @@ class SphereGame {
           mem.x = targetX;
           mem.y = targetY;
           mem.z = facePlaneZ;
+          sphere.userData.clampedFace = true;
         }
       }
       
       // Finally, enforce exact plane lock
       sphere.position.z = facePlaneZ;
+    }
+
+    // After inter-sphere resolution and face clamping, apply a gentle smoothing for spheres
+    // that bumped other spheres (but were not face-clamped this frame), to reduce sharp jumps
+    for (let i = 0; i < this.followers.length; i++) {
+      const s = this.followers[i];
+      if (s.userData.bumped && !s.userData.clampedFace) {
+        const prev = prevPositions[i];
+        // Ease 70% towards the new position from the previous frame
+        s.position.x = prev.x + (s.position.x - prev.x) * 0.7;
+        s.position.y = prev.y + (s.position.y - prev.y) * 0.7;
+        // Z remains locked already
+      }
     }
   }
 

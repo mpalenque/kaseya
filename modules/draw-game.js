@@ -1088,12 +1088,13 @@ class DrawGame {
       const tick = (now) => {
         const t = now - start;
         const done = t >= durationMs;
-        // small oscillation: vertical jiggle + tiny rotation
-        const phase = t / 1000 * 8 * Math.PI; // ~4 cycles/sec
-        const dy = Math.sin(phase) * 2;       // +/- 2px
-        const rot = Math.sin(phase * 0.8) * 0.8; // +/- 0.8deg
-        inner.style.transition = 'transform 50ms linear';
-        inner.style.transform = `translateY(${dy}px) rotate(${rot}deg)`;
+        // stronger oscillation: vertical + slight horizontal + rotation
+        const phase = t / 1000 * 12 * Math.PI; // ~6 cycles/sec
+        const dy = Math.sin(phase) * 5;        // +/- 5px
+        const dx = Math.cos(phase * 0.9) * 1.5; // +/- 1.5px
+        const rot = Math.sin(phase * 0.8) * 1.8; // +/- 1.8deg
+        inner.style.transition = 'transform 40ms linear';
+        inner.style.transform = `translate(${dx}px, ${dy}px) rotate(${rot}deg)`;
         if (!done) {
           requestAnimationFrame(tick);
         } else {
@@ -1137,18 +1138,18 @@ class DrawGame {
       inner.style.transition = `transform ${stepMs}ms ease, filter ${stepMs}ms ease, opacity ${stepMs}ms ease`;
       inner.style.willChange = 'transform, filter, opacity';
 
-      // Create incoming element with next word, starting from below
+  // Create incoming element with next word, starting closer from below so it's readable
       const incoming = document.createElement('span');
       incoming.className = 'dg-slot';
       incoming.textContent = nextWord;
       incoming.style.position = 'absolute';
       incoming.style.left = '50%';
       incoming.style.top = '50%';
-      incoming.style.transform = 'translate(-50%, 100%)';
+  incoming.style.transform = 'translate(-50%, 60%)';
       incoming.style.transition = `transform ${stepMs}ms ease, filter ${stepMs}ms ease, opacity ${stepMs}ms ease`;
       incoming.style.willChange = 'transform, filter, opacity';
-      incoming.style.filter = 'blur(4px)';
-      incoming.style.opacity = '0.65';
+  incoming.style.filter = 'blur(2px)';
+  incoming.style.opacity = '0.8';
       incoming.style.pointerEvents = 'none';
   // Match typography from inner so both words render identically
   incoming.style.fontFamily = cs.fontFamily;
@@ -1160,9 +1161,9 @@ class DrawGame {
 
       // Kick off the animation on the next frame
       requestAnimationFrame(() => {
-        // Move current (inner) up and blur/fade a bit
-        inner.style.transform = 'translate(-50%, -100%)';
-        inner.style.filter = 'blur(3px)';
+  // Move current (inner) up but stay closer and blur/fade a bit
+  inner.style.transform = 'translate(-50%, -60%)';
+  inner.style.filter = 'blur(2px)';
         inner.style.opacity = '0.5';
 
         // Move incoming into place and sharpen
