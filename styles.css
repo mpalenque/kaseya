@@ -339,10 +339,15 @@ body {
   transform-origin: left center;
 }
 
-/* Show press indicator in draw mode and when the sphere game is active */
-.draw-mode .press-indicator,
-.sphere-mode .press-indicator {
+/* Show press indicator only in draw mode */
+.draw-mode .press-indicator {
   opacity: 1;
+}
+
+/* Hide press indicator in sphere mode */
+.sphere-mode .press-indicator {
+  opacity: 0;
+  display: none;
 }
 
 @keyframes pulse {

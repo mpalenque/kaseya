@@ -24,7 +24,20 @@ class SphereGame {
   // Extra safety margin so spheres never intersect the occluder volume
   this.faceOccluderInflate = 1.12; // inflate collider radius by 12%
   this.faceColliderExtraMargin = 0.06; // absolute extra margin (world units)
+  // Extra tuning to avoid visual overlap with facemesh
+  this.facePlaneOffsetZ = 0.06; // push spheres slightly towards the camera relative to face mesh
+  this.faceCollisionExtra = 0.035; // extra radial clearance so the sphere volume never intersects
+  // Face box debug/collider scales (relative to radius)
+  // Defaults changed to larger, user-tunable values (units are multipliers applied to face radius)
+  this.faceBoxScaleX = 100; // width multiplier (default requested)
+  this.faceBoxScaleY = 170; // height multiplier (default requested)
+  this.faceBoxScaleZ = 1.0; // depth multiplier
+  // Debug box visibility (collision still works even if hidden)
+  this.showFaceDebug = false;
     this.tmp = null;
+
+    // small reusable quaternion to avoid allocations in the render loop
+    this._tmpQuat = new (typeof THREE !== 'undefined' ? THREE.Quaternion : function() {})();
     
     // Configuration system
     this.configPanel = null;
@@ -126,6 +139,16 @@ class SphereGame {
   this.spheresGroup.name = 'spheres-root';
   this.scene.add(this.spheresGroup);
 
+    // Debug cube to visualize face collision volume - now sized like face box
+    try {
+      const cubeGeo = new THREE.BoxGeometry(1, 1, 0.2);
+      const cubeMat = new THREE.MeshBasicMaterial({ color: 0xFFCC00, transparent: true, opacity: 0.3, side: THREE.DoubleSide, depthWrite: false });
+      this.faceDebugCube = new THREE.Mesh(cubeGeo, cubeMat);
+      this.faceDebugCube.visible = this.showFaceDebug; // hidden by default
+      this.faceDebugCube.renderOrder = 2;
+      this.scene.add(this.faceDebugCube);
+    } catch(_) { this.faceDebugCube = null; }
+
     // Camera setup
     this.camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.01, 100);
     this.camera.position.set(0, 0, 6);
@@ -137,10 +160,7 @@ class SphereGame {
     dir.position.set(4, 6, 8);
     this.scene.add(dir);
     
-    // Configure face tracker with THREE.js components for occlusion
-    if (this.faceTracker) {
-      this.faceTracker.setThreeComponents(this.scene, this.camera, this.renderer);
-    }
+    // Face tracker 3D wiring for occlusion removed per request
     const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
     directionalLight.position.set(4, 6, 8);
     this.scene.add(directionalLight);
@@ -186,27 +206,31 @@ class SphereGame {
       // Re-bind context loss handlers
       this.renderer.domElement.addEventListener('webglcontextlost', (e) => { e.preventDefault(); this.glLost = true; console.warn('[SphereGame] WebGL context lost'); });
       this.renderer.domElement.addEventListener('webglcontextrestored', () => { this.glLost = false; console.warn('[SphereGame] WebGL context restored'); try { this.onContextRestored(); } catch(e){} });
-      // Reconnect to face tracker for occlusion
-      if (this.faceTracker) {
-        try { this.faceTracker.setThreeComponents(this.scene, this.camera, this.renderer); } catch(_) {}
-      }
+      // Occlusion reconnection removed per request
     } catch (e) {
       console.warn('Failed to recreate WebGLRenderer:', e);
     }
   }
 
   onContextRestored() {
-    // Re-apply sizing and reconnect occluder
+    // Re-apply sizing
     try {
       this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       this.renderer.setSize(window.innerWidth, window.innerHeight);
     } catch(_) {}
-    if (this.faceTracker) {
-      try { this.faceTracker.setThreeComponents(this.scene, this.camera, this.renderer); } catch(_) {}
-    }
+    // Occluder reconnection removed per request
     // Ensure spheres exist and are visible
     if (!this.followers || this.followers.length === 0) {
-      this.createSpheres();
+      // Wait for config to load before creating spheres
+      if (this.configPromise) {
+        this.configPromise.then(() => {
+          if (this.isActive && (!this.followers || this.followers.length === 0)) {
+            this.createSpheres();
+          }
+        });
+      } else {
+        this.createSpheres();
+      }
     } else if (this.spheresGroup) {
       for (const s of this.followers) {
         if (!s.parent) this.spheresGroup.add(s);
@@ -238,22 +262,27 @@ class SphereGame {
     // Make sure renderer is ready (recover if WebGL context was lost)
     this.ensureRendererReady();
     
-    // Ensure face tracker is properly reinitialized
-    if (this.faceTracker) {
-      this.faceTracker.setThreeComponents(this.scene, this.camera, this.renderer);
-      // Force occlusion refresh
-      if (this.faceTracker.setOccluderEnabled) {
-        this.faceTracker.setOccluderEnabled(true);
-      }
-    }
+    // Occlusion setup removed per request
     
     // Wait for THREE.js and scene to be ready
     if (this.scene && this.renderer && this.clock) {
       this.currentOpacity = 0;
       if (this.spheresGroup) this.spheresGroup.position.z = 3;
-      this.createSpheres();
-      this.startAnimation();
-      this.startEnterTransition();
+      
+      // Wait for config to load before creating spheres
+      if (this.configPromise) {
+        this.configPromise.then(() => {
+          if (this.isActive) {
+            this.createSpheres();
+            this.startAnimation();
+            this.startEnterTransition();
+          }
+        });
+      } else {
+        this.createSpheres();
+        this.startAnimation();
+        this.startEnterTransition();
+      }
     } else {
       // Retry activation after a short delay
       setTimeout(() => {
@@ -264,10 +293,16 @@ class SphereGame {
     }
   }
   
-  checkAndActivate() {
+  async checkAndActivate() {
     if (this.scene && this.renderer && this.clock) {
       this.currentOpacity = 0;
       if (this.spheresGroup) this.spheresGroup.position.z = 3;
+      
+      // Wait for config to load before creating spheres
+      if (this.configPromise) {
+        await this.configPromise;
+      }
+      
       this.createSpheres();
       this.startAnimation();
       this.startEnterTransition();
@@ -397,6 +432,7 @@ class SphereGame {
     // Check if we should use custom config or generate defaults
     if (!this.defaultConfig && this.sphereConfigs && this.sphereConfigs.spheres) {
       console.log('[SphereGame] Using configuration file with', this.sphereConfigs.spheres.length, 'spheres');
+      console.log('[DEBUG] Sphere 9 config:', this.sphereConfigs.spheres.find(s => s.id === 9));
       this.createSpheresFromConfig();
       return;
     }
@@ -489,8 +525,13 @@ class SphereGame {
       const colorHex = colorDistribution[colorIndex % colorDistribution.length];
       colorIndex++;
       const color = new THREE.Color(colorHex);
-  // Increase emissive intensity by ~20%
-  const emissiveColor = new THREE.Color(colorHex).multiplyScalar(0.48);
+      
+      // Increase emissive intensity, more for cyan colors
+      let emissiveMultiplier = 0.48;
+      if (colorHex === '#00FFFF') {
+        emissiveMultiplier = 0.7; // Make cyan much brighter
+      }
+      const emissiveColor = new THREE.Color(colorHex).multiplyScalar(emissiveMultiplier);
       
       const material = new THREE.MeshStandardMaterial({ 
         color, 
@@ -654,7 +695,27 @@ class SphereGame {
     const faceColliderCenter = headData.colliderCenter;
     const faceColliderRadius = headData.colliderRadius;
     const faceColliderMargin = headData.colliderMargin;
-    
+    // Lock all spheres to the face mesh Z plane
+  const facePlaneZ = faceColliderCenter.z + (this.facePlaneOffsetZ || 0); // slight offset towards camera
+
+  // Face orientation quaternion (corrected) and its inverse for OBB tests
+  let faceQuat = null;
+  let invFaceQuat = null;
+  try {
+    if (this.faceTracker && this.faceTracker.headOccQuatSmoothed) {
+      faceQuat = this.faceTracker.headOccQuatSmoothed.clone().multiply(this.faceTracker.headOccCorrection || new THREE.Quaternion());
+      invFaceQuat = faceQuat.clone().invert();
+    }
+  } catch(_) {}
+
+  // Precompute box extents (half sizes) for this frame
+  const faceBoxWidth = (faceColliderRadius * this.faceOccluderInflate * this.faceBoxScaleX) + faceColliderMargin + this.faceColliderExtraMargin + (this.faceCollisionExtra || 0);
+  const faceBoxHeight = (faceColliderRadius * this.faceOccluderInflate * this.faceBoxScaleY) + faceColliderMargin + this.faceColliderExtraMargin + (this.faceCollisionExtra || 0);
+  const hx = faceBoxWidth * 0.5;
+  const hy = faceBoxHeight * 0.5;
+
+  const now = performance.now();
+  let collidedThisFrame = false;
     // Update sphere positions with orbital motion
     for (const sphere of this.followers) {
       const orbit = sphere.userData.orbit; 
@@ -664,47 +725,117 @@ class SphereGame {
       orbit.phi += orbit.dPhi * dt; 
       
       // Use smaller orbital radius for more subtle movement around configured positions
-      const r = Math.min(orbit.baseRadius * 0.15, 0.08); // Reduce orbital motion significantly
-      const ox = r * Math.sin(orbit.phi) * Math.cos(orbit.theta); 
-      const oy = r * Math.cos(orbit.phi); 
-      let oz = r * Math.sin(orbit.phi) * Math.sin(orbit.theta);
-      oz = oz * orbit.zMul + orbit.zBias; 
+  const rOrbit = Math.min(orbit.baseRadius * 0.15, 0.08); // Reduce orbital motion significantly
+  const ox = rOrbit * Math.sin(orbit.phi) * Math.cos(orbit.theta); 
+  const oy = rOrbit * Math.cos(orbit.phi); 
+      // Z orbital component is ignored because we lock Z to the face plane
+      let oz = 0;
       
       // Calculate target position: base position + head offset + small orbital motion
       if (basePos) {
-        // Use configured base position with head tracking offset and subtle orbital motion
-        this.tmp.set(
-          basePos.x + headPosSmoothed.x * 0.3 + ox, 
-          basePos.y + headPosSmoothed.y * 0.3 + oy, 
-          basePos.z + headPosSmoothed.z * 0.2 + oz
-        );
+        // If sphere is permanently displaced, stay at displaced position
+        if (sphere.userData.isDisplaced && sphere.userData.displacedPosition) {
+          const dispPos = sphere.userData.displacedPosition;
+          this.tmp.set(
+            dispPos.x + ox * 0.3, // small orbital motion around displaced position
+            dispPos.y + oy * 0.3,
+            facePlaneZ
+          );
+        }
+        // When sphere was repelled recently, stick to the boundary anchor instead of trying to re-enter
+        else if (now < (sphere.userData.repelUntil || 0) && sphere.userData.lastBoundary) {
+          const anc = sphere.userData.lastBoundary;
+          this.tmp.set(
+            anc.x + ox * 0.6, // smaller orbital motion around boundary
+            anc.y + oy * 0.6,
+            facePlaneZ
+          );
+        } else {
+          // Use configured base position with head tracking offset and subtle orbital motion
+          this.tmp.set(
+            basePos.x + headPosSmoothed.x * 0.3 + ox, 
+            basePos.y + headPosSmoothed.y * 0.3 + oy, 
+            facePlaneZ
+          );
+        }
       } else {
         // Fallback to original behavior if no base position configured
-        this.tmp.set(ox, oy, oz).add(headPosSmoothed);
+        this.tmp.set(ox + headPosSmoothed.x, oy + headPosSmoothed.y, facePlaneZ);
       }
       
-      // Collision avoidance with face - improved smoothness
-      const dxh = this.tmp.x - faceColliderCenter.x; 
-      const dyh = this.tmp.y - faceColliderCenter.y; 
-      const dzh = this.tmp.z - faceColliderCenter.z; 
-      const distHeadSq = dxh*dxh + dyh*dyh + dzh*dzh; 
-  const minHeadDist = (faceColliderRadius * this.faceOccluderInflate) + sphere.userData.radius + faceColliderMargin + this.faceColliderExtraMargin;
-      
-      if (distHeadSq > 0.0001) { 
-        const distHead = Math.sqrt(distHeadSq); 
-        if (distHead < minHeadDist) { 
-          const overlap = minHeadDist - distHead;
-          const pushStrength = Math.min(overlap / minHeadDist, 1.0); // Normalize push strength
-          const smoothFactor = 0.55; // Stronger push to stay outside occluder
-          const scale = pushStrength * smoothFactor / distHead;
-          this.tmp.x += dxh * scale; 
-          this.tmp.y += dyh * scale; 
-          this.tmp.z += dzh * scale; 
-        } 
+      // Face OBB collision detection (rotate into face local space if available)
+      const desiredX = this.tmp.x;
+      const desiredY = this.tmp.y;
+      const sphereRadius = sphere.userData.radius;
+      let hitFace = false;
+      if (faceQuat && invFaceQuat) {
+        const local = new THREE.Vector3(desiredX - faceColliderCenter.x, desiredY - faceColliderCenter.y, 0).applyQuaternion(invFaceQuat);
+        const inX = (local.x > -hx - sphereRadius) && (local.x < hx + sphereRadius);
+        const inY = (local.y > -hy - sphereRadius) && (local.y < hy + sphereRadius);
+        hitFace = inX && inY;
+        if (hitFace) {
+          sphere.userData.isDisplaced = true;
+          sphere.userData.displacedPosition ||= { x: sphere.position.x, y: sphere.position.y, z: facePlaneZ };
+          const margin = 0.04;
+          const gapX = hx - Math.abs(local.x);
+          const gapY = hy - Math.abs(local.y);
+          const targetLocal = local.clone();
+          if (gapX < gapY) {
+            targetLocal.x = (local.x >= 0 ? hx + sphereRadius + margin : -hx - sphereRadius - margin);
+          } else {
+            targetLocal.y = (local.y >= 0 ? hy + sphereRadius + margin : -hy - sphereRadius - margin);
+          }
+          const worldTarget = targetLocal.applyQuaternion(faceQuat).add(new THREE.Vector3(faceColliderCenter.x, faceColliderCenter.y, 0));
+          const resolveAlpha = 0.06;
+          this.tmp.x = desiredX + (worldTarget.x - desiredX) * resolveAlpha;
+          this.tmp.y = desiredY + (worldTarget.y - desiredY) * resolveAlpha;
+          this.tmp.z = facePlaneZ;
+          const mem = sphere.userData.displacedPosition;
+          mem.x = mem.x + (this.tmp.x - mem.x) * 0.06;
+          mem.y = mem.y + (this.tmp.y - mem.y) * 0.06;
+          mem.z = facePlaneZ;
+          collidedThisFrame = true;
+        }
+      } else {
+        // Fallback: axis-aligned box
+        const boxLeft = faceColliderCenter.x - hx;
+        const boxRight = faceColliderCenter.x + hx;
+        const boxTop = faceColliderCenter.y + hy;
+        const boxBottom = faceColliderCenter.y - hy;
+        const sphereLeft = desiredX - sphereRadius;
+        const sphereRight = desiredX + sphereRadius;
+        const sphereTop = desiredY + sphereRadius;
+        const sphereBottom = desiredY - sphereRadius;
+        const isCollidingWithFaceBox = !(sphereRight < boxLeft || sphereLeft > boxRight || sphereBottom > boxTop || sphereTop < boxBottom);
+        if (isCollidingWithFaceBox) {
+          sphere.userData.isDisplaced = true;
+          sphere.userData.displacedPosition ||= { x: sphere.position.x, y: sphere.position.y, z: facePlaneZ };
+          const distToLeft = Math.abs(desiredX - boxLeft);
+          const distToRight = Math.abs(desiredX - boxRight);
+          const distToTop = Math.abs(desiredY - boxTop);
+          const distToBottom = Math.abs(desiredY - boxBottom);
+          const minDist = Math.min(distToLeft, distToRight, distToTop, distToBottom);
+          let targetX = desiredX;
+          let targetY = desiredY;
+          const margin = 0.04;
+          if (minDist === distToLeft) targetX = boxLeft - sphereRadius - margin;
+          else if (minDist === distToRight) targetX = boxRight + sphereRadius + margin;
+          if (minDist === distToTop) targetY = boxTop + sphereRadius + margin;
+          else if (minDist === distToBottom) targetY = boxBottom - sphereRadius - margin;
+          const resolveAlpha = 0.06;
+          this.tmp.x = desiredX + (targetX - desiredX) * resolveAlpha;
+          this.tmp.y = desiredY + (targetY - desiredY) * resolveAlpha;
+          this.tmp.z = facePlaneZ;
+          const mem = sphere.userData.displacedPosition;
+          mem.x = mem.x + (this.tmp.x - mem.x) * 0.06;
+          mem.y = mem.y + (this.tmp.y - mem.y) * 0.06;
+          mem.z = facePlaneZ;
+          collidedThisFrame = true;
+        }
       }
       
-      // Face plane constraint - removed to allow spheres to move further forward
-      // Spheres can now move freely in Z direction based on slider configuration
+      // Face plane constraint: all spheres share the same Z as the face mesh
+      this.tmp.z = facePlaneZ;
       
       // Make following speed time-based and slightly faster on mobile
       let alpha = orbit.followLerp;
@@ -714,11 +845,48 @@ class SphereGame {
       if (this.isMobile) {
         alpha = Math.min(0.25, alpha * 1.15); // small boost on mobile
       }
-      sphere.position.lerp(this.tmp, alpha);
+  // Interpolate towards target
+      const prevX = sphere.position.x;
+      const prevY = sphere.position.y;
+  // If displaced, blend much slower for extra smoothness
+  const alphaAdjusted = (sphere.userData.isDisplaced ? Math.min(alpha, 0.04) : alpha);
+  sphere.position.lerp(this.tmp, alphaAdjusted);
+      // Gentle damping post-collision to reduce jitter/violence
+      if (collidedThisFrame) {
+        sphere.position.x = prevX + (sphere.position.x - prevX) * 0.85;
+        sphere.position.y = prevY + (sphere.position.y - prevY) * 0.85;
+      }
+  // Ensure Z stays locked exactly on the plane after interpolation
+  sphere.position.z = facePlaneZ;
     }
 
-  // Inter-sphere collision resolution - improved for smooth movement
-    for (let iter = 0; iter < 5; iter++) { // More iterations for smoother resolution
+    // Update debug cube showing the face collision volume - now as face-sized box
+    if (this.faceDebugCube) {
+      // Make the cube bigger in X and Y to match face dimensions, not just a circle
+      const faceBoxWidth = (faceColliderRadius * this.faceOccluderInflate * this.faceBoxScaleX) + faceColliderMargin + this.faceColliderExtraMargin + (this.faceCollisionExtra || 0);
+      const faceBoxHeight = (faceColliderRadius * this.faceOccluderInflate * this.faceBoxScaleY) + faceColliderMargin + this.faceColliderExtraMargin + (this.faceCollisionExtra || 0); // Taller for face shape
+      this.faceDebugCube.position.set(faceColliderCenter.x, faceColliderCenter.y, facePlaneZ);
+  const depth = (this.meshZThick || 0.12) * (this.faceBoxScaleZ || 1.0);
+  this.faceDebugCube.scale.set(faceBoxWidth, faceBoxHeight, depth);
+  this.faceDebugCube.visible = this.showFaceDebug;
+      // Apply face rotation if available (use faceTracker's smoothed occlusion quaternion + correction)
+      try {
+        if (this.faceTracker && this.faceTracker.headOccQuatSmoothed) {
+          // Use cloned corrected quaternion to avoid mutating faceTracker internals
+          const corrected = this.faceTracker.headOccQuatSmoothed.clone().multiply(this.faceTracker.headOccCorrection || new THREE.Quaternion());
+          this.faceDebugCube.quaternion.copy(corrected);
+        }
+      } catch (e) {
+        // ignore if quaternion not available or THREE not ready
+      }
+      if (this.faceDebugCube.material && this.faceDebugCube.material.color) {
+        this.faceDebugCube.material.color.setHex(collidedThisFrame ? 0xFF3333 : 0xFFCC00);
+        this.faceDebugCube.material.opacity = collidedThisFrame ? 0.5 : 0.3;
+      }
+    }
+
+  // Inter-sphere collision resolution - softer
+    for (let iter = 0; iter < 3; iter++) { // Fewer, softer iterations
       for (let i = 0; i < this.followers.length; i++) {
         const sphereA = this.followers[i]; 
         const radiusA = sphereA.userData.radius;
@@ -729,38 +897,36 @@ class SphereGame {
           
           const dx = sphereB.position.x - sphereA.position.x; 
           const dy = sphereB.position.y - sphereA.position.y; 
-          const dz = sphereB.position.z - sphereA.position.z; 
-          const distSq = dx*dx + dy*dy + dz*dz; 
+          // With Z locked, use XY distance only
+          const distSq = dx*dx + dy*dy; 
           const minDist = radiusA + radiusB + 0.02; // Slightly more padding
           
           if (distSq > 0) { 
             const dist = Math.sqrt(distSq); 
             if (dist < minDist) { 
               const overlap = (minDist - dist); 
-              const nx = dx / dist; 
-              const ny = dy / dist; 
-              const nz = dz / dist; 
+              const nx = dx / (dist || 1); 
+              const ny = dy / (dist || 1); 
               
-              // Much softer stiffness with gradual reduction
-              const baseStiffness = 0.15; // Much softer base stiffness
-              const factor = baseStiffness * (1.0 - iter * 0.15); // More gradual reduction
-              const push = overlap * 0.5 * Math.max(0.05, factor); 
+              // Softer stiffness with more damping
+              const baseStiffness = 0.08;
+              const factor = baseStiffness * (1.0 - iter * 0.2);
+              const push = overlap * 0.5 * Math.max(0.03, factor); 
               
               const pushAx = -nx * push; 
               const pushAy = -ny * push; 
-              const pushAz = -nz * push; 
               const pushBx = nx * push; 
               const pushBy = ny * push; 
-              const pushBz = nz * push; 
               
-              // Corrected smooth interpolation with damping
-              const damping = 0.3; // Much gentler movement
+              // Stronger damping for gentler movement
+              const damping = 0.2; // less push per iteration
               sphereA.position.x += pushAx * damping; 
               sphereA.position.y += pushAy * damping; 
-              sphereA.position.z += pushAz * damping; 
+              // Keep Z fixed
+              sphereA.position.z = facePlaneZ; 
               sphereB.position.x += pushBx * damping; 
               sphereB.position.y += pushBy * damping; 
-              sphereB.position.z += pushBz * damping; 
+              sphereB.position.z = facePlaneZ; 
               
               // Face plane constraint - removed to allow spheres to move further forward
               // const faceZ = headPosSmoothed.z + this.facePlaneMargin; 
@@ -772,30 +938,58 @@ class SphereGame {
       }
     }
 
-    // Final enforcement: ensure spheres are outside the face occluder radius with added margin
-    // const faceZ = headPosSmoothed.z + this.facePlaneMargin; // Removed to allow forward movement
+    // Final enforcement: ensure spheres are outside the face box/OBB with added margin (soft)
     for (const sphere of this.followers) {
-      const dx = sphere.position.x - faceColliderCenter.x;
-      const dy = sphere.position.y - faceColliderCenter.y;
-      const dz = sphere.position.z - faceColliderCenter.z;
-      let dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
-      const minDist = (faceColliderRadius * this.faceOccluderInflate) + sphere.userData.radius + faceColliderMargin + this.faceColliderExtraMargin;
-      if (dist < minDist) {
-        // If very close to center, pick a fallback direction
-        let nx, ny, nz;
-        if (dist > 1e-4) { nx = dx / dist; ny = dy / dist; nz = dz / dist; }
-        else { nx = 0; ny = 1; nz = 0; dist = 1; }
-        const targetX = faceColliderCenter.x + nx * minDist;
-        const targetY = faceColliderCenter.y + ny * minDist;
-        const targetZ = faceColliderCenter.z + nz * minDist;
-        // Snap a bit towards the safe position (not full snap to avoid popping)
-        const k = 0.85;
-        sphere.position.x = sphere.position.x + (targetX - sphere.position.x) * k;
-        sphere.position.y = sphere.position.y + (targetY - sphere.position.y) * k;
-        sphere.position.z = sphere.position.z + (targetZ - sphere.position.z) * k;
+      const sphereRadius = sphere.userData.radius;
+      if (faceQuat && invFaceQuat) {
+        const local = new THREE.Vector3(sphere.position.x - faceColliderCenter.x, sphere.position.y - faceColliderCenter.y, 0).applyQuaternion(invFaceQuat);
+        const inX = (local.x > -hx - sphereRadius) && (local.x < hx + sphereRadius);
+        const inY = (local.y > -hy - sphereRadius) && (local.y < hy + sphereRadius);
+        if (inX && inY) {
+          const margin = 0.04;
+          const gapX = hx - Math.abs(local.x);
+          const gapY = hy - Math.abs(local.y);
+          if (gapX < gapY) {
+            local.x = (local.x >= 0 ? hx + sphereRadius + margin : -hx - sphereRadius - margin);
+          } else {
+            local.y = (local.y >= 0 ? hy + sphereRadius + margin : -hy - sphereRadius - margin);
+          }
+          const world = local.applyQuaternion(faceQuat).add(new THREE.Vector3(faceColliderCenter.x, faceColliderCenter.y, 0));
+          const resolveAlpha = 0.12;
+          sphere.position.x = sphere.position.x + (world.x - sphere.position.x) * resolveAlpha;
+          sphere.position.y = sphere.position.y + (world.y - sphere.position.y) * resolveAlpha;
+          sphere.userData.isDisplaced = true;
+          sphere.userData.displacedPosition = { x: sphere.position.x, y: sphere.position.y, z: facePlaneZ };
+        }
+      } else {
+        const boxLeft = faceColliderCenter.x - hx;
+        const boxRight = faceColliderCenter.x + hx;
+        const boxTop = faceColliderCenter.y + hy;
+        const boxBottom = faceColliderCenter.y - hy;
+        const inAABB = !( (sphere.position.x + sphereRadius) < boxLeft || (sphere.position.x - sphereRadius) > boxRight || (sphere.position.y - sphereRadius) > boxTop || (sphere.position.y + sphereRadius) < boxBottom );
+        if (inAABB) {
+          const distToLeft = Math.abs(sphere.position.x - boxLeft);
+          const distToRight = Math.abs(sphere.position.x - boxRight);
+          const distToTop = Math.abs(sphere.position.y - boxTop);
+          const distToBottom = Math.abs(sphere.position.y - boxBottom);
+          const minDist = Math.min(distToLeft, distToRight, distToTop, distToBottom);
+          const margin = 0.04;
+          let targetX = sphere.position.x;
+          let targetY = sphere.position.y;
+          if (minDist === distToLeft) targetX = boxLeft - sphereRadius - margin;
+          else if (minDist === distToRight) targetX = boxRight + sphereRadius + margin;
+          if (minDist === distToTop) targetY = boxTop + sphereRadius + margin;
+          else if (minDist === distToBottom) targetY = boxBottom - sphereRadius - margin;
+          const resolveAlpha = 0.12;
+          sphere.position.x = sphere.position.x + (targetX - sphere.position.x) * resolveAlpha;
+          sphere.position.y = sphere.position.y + (targetY - sphere.position.y) * resolveAlpha;
+          sphere.userData.isDisplaced = true;
+          sphere.userData.displacedPosition = { x: sphere.position.x, y: sphere.position.y, z: facePlaneZ };
+        }
       }
-      // Keep in front of face plane - removed to allow spheres to move further forward
-      // if (sphere.position.z > faceZ) sphere.position.z = faceZ;
+      
+      // Finally, enforce exact plane lock
+      sphere.position.z = facePlaneZ;
     }
   }
 
@@ -904,15 +1098,21 @@ class SphereGame {
       // Use embedded static configuration directly for consistent deployment
       console.log('[SphereGame] Using embedded static configuration with captured positions');
       this.sphereConfigs = this.getEmbeddedConfig();
+      // Normalize colors according to business rule: sphere 9 must match sphere 11
+      this.normalizeConfigColors?.();
       this.defaultConfig = false;
       this.applyConfigIfActive();
       this.configLoaded = true;
       console.log('[SphereGame] ✅ Loaded static config:', this.sphereConfigs.spheres.length, 'spheres');
       console.log('[SphereGame] First sphere position:', this.sphereConfigs.spheres[0]?.position);
+      console.log('[DEBUG] defaultConfig after loading:', this.defaultConfig);
+      console.log('[DEBUG] Sphere 9 from loaded config:', this.sphereConfigs.spheres.find(s => s.id === 9));
     } catch (e) {
       console.error('[SphereGame] Error loading sphere config:', e);
       // Use embedded config as final fallback
       this.sphereConfigs = this.getEmbeddedConfig();
+      // Normalize colors according to business rule: sphere 9 must match sphere 11
+      this.normalizeConfigColors?.();
       this.defaultConfig = false;
       this.applyConfigIfActive();
       this.configLoaded = true;
@@ -933,30 +1133,30 @@ class SphereGame {
   getEmbeddedConfig() {
     return {
       "spheres": [
-        {"id": 0, "position": {"x": 0.57, "y": 0.19, "z": 4.01}, "radius": 0.13, "baseRadius": 4.06, "color": "#5E2EA7"},
-        {"id": 1, "position": {"x": 0.95, "y": 3.31, "z": -2.95}, "radius": 0.23, "baseRadius": 4.55, "color": "#00FFFF"},
-        {"id": 2, "position": {"x": 0.08, "y": -1.48, "z": 0.36}, "radius": 0.15, "baseRadius": 1.52, "color": "#3D348B"},
-        {"id": 3, "position": {"x": -1.3, "y": -1.43, "z": -0.24}, "radius": 0.15, "baseRadius": 1.95, "color": "#7209B7"},
-        {"id": 4, "position": {"x": 0.58, "y": -1.25, "z": 2.98}, "radius": 0.15, "baseRadius": 3.28, "color": "#7209B7"},
-        {"id": 5, "position": {"x": -1.08, "y": 2.44, "z": 0.98}, "radius": 0.05, "baseRadius": 2.85, "color": "#5E2EA7"},
-        {"id": 6, "position": {"x": -0.81, "y": 2.28, "z": -0.31}, "radius": 0.24, "baseRadius": 2.44, "color": "#8A2BE2"},
-        {"id": 7, "position": {"x": -1.18, "y": -0.33, "z": -0.35}, "radius": 0.15, "baseRadius": 1.27, "color": "#B794F4"},
-        {"id": 8, "position": {"x": -5.57, "y": -1.29, "z": -0.51}, "radius": 0.15, "baseRadius": 5.74, "color": "#00FFFF"},
-        {"id": 9, "position": {"x": 1.42, "y": -1.37, "z": -1.17}, "radius": 0.15, "baseRadius": 2.3, "color": "#A45CFF"},
-        {"id": 10, "position": {"x": -2.21, "y": 3.5, "z": -5.32}, "radius": 0.2, "baseRadius": 6.74, "color": "#00FFFF"},
-        {"id": 11, "position": {"x": -5.5, "y": -0.69, "z": -0.02}, "radius": 0.15, "baseRadius": 5.54, "color": "#B794F4"},
-        {"id": 12, "position": {"x": -5.68, "y": -0.86, "z": 0.18}, "radius": 0.15, "baseRadius": 5.75, "color": "#7209B7"},
-        {"id": 13, "position": {"x": -5.75, "y": -0.79, "z": -0.45}, "radius": 0.15, "baseRadius": 5.82, "color": "#3D348B"},
-        {"id": 14, "position": {"x": 0.48, "y": 4.39, "z": -4.28}, "radius": 0.08, "baseRadius": 6.15, "color": "#36E5FF"},
-        {"id": 15, "position": {"x": -0.89, "y": 3.04, "z": -0.92}, "radius": 0.06, "baseRadius": 3.3, "color": "#C77DFF"},
-        {"id": 16, "position": {"x": -1.25, "y": 0.55, "z": -0.13}, "radius": 0.08, "baseRadius": 1.38, "color": "#A45CFF"},
-        {"id": 17, "position": {"x": -5.47, "y": -0.27, "z": 0.29}, "radius": 0.15, "baseRadius": 5.48, "color": "#C77DFF"},
-        {"id": 18, "position": {"x": -5.75, "y": -0.15, "z": 0.28}, "radius": 0.15, "baseRadius": 5.75, "color": "#C77DFF"},
-        {"id": 19, "position": {"x": 2.07, "y": 4.82, "z": -4.19}, "radius": 0.15, "baseRadius": 6.71, "color": "#00FFFF"},
-        {"id": 20, "position": {"x": -5.63, "y": 0.13, "z": 0.39}, "radius": 0.15, "baseRadius": 5.65, "color": "#8A2BE2"},
-        {"id": 21, "position": {"x": 2, "y": 4.81, "z": -5.04}, "radius": 0.07, "baseRadius": 7.25, "color": "#00FFFF"}
+        {"id": 0, "position": {"x": -0.95, "y": -0.58, "z": 3.06}, "radius": 0.14, "baseRadius": 3.26, "color": "#5E2EA7"},
+        {"id": 1, "position": {"x": 0.36, "y": 1.05, "z": 3.06}, "radius": 0.06, "baseRadius": 3.26, "color": "#00FFFF"},
+        {"id": 2, "position": {"x": 0.2, "y": -0.79, "z": 3.06}, "radius": 0.22, "baseRadius": 3.17, "color": "#3D348B"},
+        {"id": 3, "position": {"x": 0.94, "y": 0.98, "z": 3.06}, "radius": 0.15, "baseRadius": 3.35, "color": "#00FFFF"},
+        {"id": 4, "position": {"x": 0.78, "y": -1.12, "z": 3.06}, "radius": 0.05, "baseRadius": 3.35, "color": "#7209B7"},
+        {"id": 5, "position": {"x": -0.95, "y": 0.63, "z": 3.06}, "radius": 0.18, "baseRadius": 3.27, "color": "#26147A"},
+        {"id": 6, "position": {"x": -0.59, "y": 1.09, "z": 3.06}, "radius": 0.14, "baseRadius": 3.3, "color": "#8A2BE2"},
+        {"id": 7, "position": {"x": -0.17, "y": -1.18, "z": 3.06}, "radius": 0.19, "baseRadius": 3.28, "color": "#B794F4"},
+        {"id": 8, "position": {"x": 0.83, "y": -0.5, "z": 3.06}, "radius": 0.05, "baseRadius": 3.21, "color": "#B794F4"},
+        {"id": 9, "position": {"x": 1.49, "y": -0.68, "z": 3.06}, "radius": 0.17, "baseRadius": 3.47, "color": "#B794F4"},
+        {"id": 10, "position": {"x": -1.11, "y": 1.18, "z": 3.06}, "radius": 0.2, "baseRadius": 3.46, "color": "#00FFFF"},
+        {"id": 11, "position": {"x": 1.13, "y": 1.09, "z": 3.06}, "radius": 0.05, "baseRadius": 3.44, "color": "#B794F4"},
+        {"id": 12, "position": {"x": -1.26, "y": -0.2, "z": 3.06}, "radius": 0.15, "baseRadius": 3.32, "color": "#7209B7"},
+        {"id": 13, "position": {"x": 1.06, "y": 0.17, "z": 3.06}, "radius": 0.21, "baseRadius": 3.24, "color": "#3D348B"},
+        {"id": 14, "position": {"x": 0.63, "y": 1.39, "z": 3.06}, "radius": 0.05, "baseRadius": 3.42, "color": "#36E5FF"},
+        {"id": 15, "position": {"x": -1.39, "y": 0.28, "z": 3.06}, "radius": 0.06, "baseRadius": 3.37, "color": "#C77DFF"},
+        {"id": 16, "position": {"x": -0.88, "y": 0.13, "z": 3.06}, "radius": 0.05, "baseRadius": 3.19, "color": "#A45CFF"},
+        {"id": 17, "position": {"x": -2.21, "y": -1.29, "z": 3.06}, "radius": 0.12, "baseRadius": 3.99, "color": "#C77DFF"},
+        {"id": 18, "position": {"x": -2.72, "y": 0.73, "z": 3.06}, "radius": 0.15, "baseRadius": 4.16, "color": "#C77DFF"},
+        {"id": 19, "position": {"x": -0.76, "y": 0.98, "z": 3.06}, "radius": 0.05, "baseRadius": 3.3, "color": "#00FFFF"},
+        {"id": 20, "position": {"x": -1.5, "y": 0.76, "z": 3.06}, "radius": 0.16, "baseRadius": 3.49, "color": "#8A2BE2"},
+        {"id": 21, "position": {"x": -0.06, "y": 1.46, "z": 3.06}, "radius": 0.28, "baseRadius": 3.39, "color": "#26147A"}
       ],
-      "timestamp": 1758919666320
+      "timestamp": 1759265306474
     };
   }
 
@@ -1335,10 +1535,21 @@ class SphereGame {
     this.sphereConfigs.spheres.forEach((config, index) => {
       const { position, radius, color } = config;
       
+      // Debug logging for sphere 9
+      if (config.id === 9) {
+        console.log(`[DEBUG] Creating sphere 9 with color: ${color}, config ID: ${config.id}, array index: ${index}`);
+      }
+      
       // Create sphere geometry and material
       const geometry = new THREE.SphereGeometry(radius, 24, 24);
       const sphereColor = new THREE.Color(color);
-      const emissiveColor = new THREE.Color(color).multiplyScalar(0.48);
+      
+      // Increase emissive intensity for cyan colors to make them brighter
+      let emissiveMultiplier = 0.48;
+      if (color === '#00FFFF') {
+        emissiveMultiplier = 0.7; // Make cyan much brighter
+      }
+      const emissiveColor = new THREE.Color(color).multiplyScalar(emissiveMultiplier);
       
       const material = new THREE.MeshStandardMaterial({ 
         color: sphereColor, 
@@ -1351,6 +1562,8 @@ class SphereGame {
       
       const mesh = new THREE.Mesh(geometry, material);
       mesh.position.set(position.x, position.y, position.z);
+      // Keep original id for debugging/selection
+      mesh.userData.id = config.id;
       
       // Orbital behavior data - use configured position as base
       const baseRadius = Math.sqrt(position.x*position.x + position.y*position.y + position.z*position.z);
@@ -1383,6 +1596,38 @@ class SphereGame {
         radius 
       });
     });
+
+    // Post-creation debug: verify colors of spheres 9 and 11
+    try {
+      const nine = this.followers.find(m => m.userData?.id === 9);
+      const eleven = this.followers.find(m => m.userData?.id === 11);
+      if (nine && eleven) {
+        console.log('[DEBUG] Material colors -> s9:', '#' + nine.material.color.getHexString().toUpperCase(), ' s11:', '#' + eleven.material.color.getHexString().toUpperCase());
+      }
+    } catch (_) {}
+  }
+
+  // Ensure business rule: sphere 9 color must equal sphere 11 color
+  normalizeConfigColors() {
+    try {
+      if (!this.sphereConfigs || !Array.isArray(this.sphereConfigs.spheres)) return;
+      const s9 = this.sphereConfigs.spheres.find(s => s.id === 9);
+      const s11 = this.sphereConfigs.spheres.find(s => s.id === 11);
+      if (s9 && s11 && s11.color && s9.color !== s11.color) {
+        console.log('[SphereGame] Normalizing colors: setting sphere 9 color to match sphere 11:', s11.color);
+        s9.color = s11.color;
+      }
+
+      // Also enforce: sphere 8 color must equal sphere 7 color
+      const s8 = this.sphereConfigs.spheres.find(s => s.id === 8);
+      const s7 = this.sphereConfigs.spheres.find(s => s.id === 7);
+      if (s8 && s7 && s7.color && s8.color !== s7.color) {
+        console.log('[SphereGame] Normalizing colors: setting sphere 8 color to match sphere 7:', s7.color);
+        s8.color = s7.color;
+      }
+    } catch (e) {
+      console.warn('[SphereGame] normalizeConfigColors failed:', e);
+    }
   }
 
   saveConfiguration() {

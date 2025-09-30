@@ -41,6 +41,8 @@ class FaceTracker {
     this.meshRadialScale = 1.6 * 0.93 * 0.97;
     this.meshExtraPush = 0.0;
     this.meshHorizontalScale = 0.9 * 0.95;
+  // Extra thickness along world Z to ensure robust occlusion (visual extrusion)
+  this.meshZThick = 0.06; // half-thickness added both forward and backward in Z
     
     // FBX head occluder
     this.fbxLoader = null;
@@ -633,7 +635,7 @@ class FaceTracker {
     }
 
     // Apply scaling and transformations
-    if (this.meshRadialScale !== 1.0 || this.meshExtraPush !== 0.0 || this.meshHorizontalScale !== 1.0) {
+    if (this.meshRadialScale !== 1.0 || this.meshExtraPush !== 0.0 || this.meshHorizontalScale !== 1.0 || (this.meshZThick && this.meshZThick !== 0)) {
       const cxw = this.headPosSmoothed.x, cyw = this.headPosSmoothed.y, czw = this.headPosSmoothed.z;
       for (let i = 0; i < count; i++) {
         const idx = i * 3;
@@ -645,6 +647,11 @@ class FaceTracker {
         y = y * this.meshRadialScale + (y / len) * this.meshExtraPush;
         z = z * this.meshRadialScale + (z / len) * this.meshExtraPush;
         x *= this.meshHorizontalScale;
+        // Apply Z-thickness extrusion symmetrically along world Z
+        if (this.meshZThick) {
+          const zSign = z >= 0 ? 1 : -1;
+          z += zSign * this.meshZThick;
+        }
         this.faceTargets[idx + 0] = cxw + x;
         this.faceTargets[idx + 1] = cyw + y;
         this.faceTargets[idx + 2] = czw + z;
