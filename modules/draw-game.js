@@ -1,7 +1,9 @@
 // Draw game functionality with word roulette and animated rings
 class DrawGame {
   constructor() {
-    this.currentWord = "What's my tech alter-ego?"; // Texto inicial
+    // Texto inicial y referencia para detectar el mensaje de inicio
+    this.initialPrompt = "What's my tech alter-ego?";
+    this.currentWord = this.initialPrompt; // Texto inicial
     this.isSpinning = false;
     this.permanentWordElement = null;
   // 3D rings
@@ -129,8 +131,15 @@ class DrawGame {
     this.permanentWordElement.style.top = '16%';
     this.permanentWordElement.style.transform = 'translateX(-50%)';
     this.permanentWordElement.style.zIndex = '15';
-    this.permanentWordElement.style.width = '380px';
-    this.permanentWordElement.style.height = '130px';
+    // Make banner 35% smaller than before (380x130 -> ~247x85)
+    this.permanentWordElement.style.width = '247px';
+    this.permanentWordElement.style.height = '85px';
+    // Ensure content stays centered and anim-safe
+    this.permanentWordElement.style.display = 'flex';
+    this.permanentWordElement.style.alignItems = 'center';
+    this.permanentWordElement.style.justifyContent = 'center';
+    this.permanentWordElement.style.textAlign = 'center';
+    this.permanentWordElement.style.overflow = 'hidden';
     document.body.appendChild(this.permanentWordElement);
     this.autoFitWordBanner();
   }
@@ -221,7 +230,10 @@ class DrawGame {
           color: color,
           transparent: true,
           opacity: layer.opacity,
-          blending: THREE.AdditiveBlending // Clave para el efecto de brillo
+          blending: THREE.AdditiveBlending, // Clave para el efecto de brillo
+          depthWrite: false,
+          depthTest: true,
+          side: THREE.DoubleSide
         });
         const ring = new THREE.Mesh(geometry, material);
         
@@ -268,7 +280,22 @@ class DrawGame {
 
     const hasFace = ft.getCurrentFaces && ft.getCurrentFaces().length > 0;
     if (!hasFace) {
-      this.set3DRingsVisible(false);
+      // Show a safe fallback position so user still sees rings while tracker warms up
+      try {
+        const THREE = window.THREE;
+        const cam = ft.camera;
+        if (cam && THREE) {
+          const center = new THREE.Vector3(0, 0, 0).add(cam.position).add(new THREE.Vector3(0, 0, -3));
+          const upWorld = cam.up ? cam.up.clone().normalize() : new THREE.Vector3(0, 1, 0);
+          const pos = center.clone();
+          pos.addScaledVector(upWorld, 0.9);
+          this.ring3DGroup.position.copy(pos);
+          this.ring3DGroup.quaternion.copy(new THREE.Quaternion());
+          this.set3DRingsVisible(true);
+        } else {
+          this.set3DRingsVisible(false);
+        }
+      } catch(_) { this.set3DRingsVisible(false); }
       return;
     }
 
@@ -457,6 +484,9 @@ class DrawGame {
 
     const step = (now) => {
       const t = now / 1000;
+
+      // Keep 3D rings following head tracking each frame to avoid drift/desync
+      try { this.update3DRingsPosition(); } catch (_) {}
 
       // Animate 2D DOM rings if they still exist (unlikely since removed), keep for backward-compat
       if (this.ellipsePurple) {
@@ -999,28 +1029,23 @@ class DrawGame {
     
     // Use the permanent word element for spinning
     this.permanentWordElement.className = 'word-text spinning';
-    
-    // Spin for 3 seconds
-    const spinDuration = 3000;
-    const spinInterval = 200;
-    let spinTime = 0;
-    
-    const spinIntervalId = setInterval(() => {
-      const randomWord = this.words[Math.floor(Math.random() * this.words.length)];
-      this.currentWord = randomWord;
-      const inner = this.permanentWordElement.querySelector('.word-inner');
-      if (inner) {
-        inner.textContent = randomWord;
-        this.autoFitWordBanner();
-      }
-      
-      spinTime += spinInterval;
-      
-      if (spinTime >= spinDuration) {
-        clearInterval(spinIntervalId);
-        this.finalizeRoulette();
-      }
-    }, spinInterval);
+
+    // 1) Pre-spin: keep initial phrase briefly and vibrate a bit
+    // If the current text is the initial prompt, hold ~900ms with a subtle shake
+    const holdMs = 900;
+    await this._preSpinShake(holdMs);
+
+    // 2) Smooth scroll/roulette with blur
+    const spinDuration = 3000; // total spin duration
+    const stepMs = 260;        // each scroll step duration (should be >= transition time)
+    const endAt = performance.now() + spinDuration;
+    while (performance.now() < endAt) {
+      const next = this.words[Math.floor(Math.random() * this.words.length)];
+      await this._animateScrollTo(next, stepMs);
+    }
+
+    // 3) Finalize selection with one last scroll-in
+    await this.finalizeRoulette();
   }
 
   finalizeRoulette() {
@@ -1030,20 +1055,147 @@ class DrawGame {
     const finalWord = this.words[Math.floor(Math.random() * this.words.length)];
     this.currentWord = finalWord;
     const inner = this.permanentWordElement.querySelector('.word-inner');
+    // Animate one last scroll transition to the final word, then settle
+    const doFinish = async () => {
+      try {
+        await this._animateScrollTo(finalWord, 320);
+      } catch (_) {}
+      this.permanentWordElement.className = 'word-text';
+      this.autoFitWordBanner();
+      // Keep the final effect for a bit, then return to normal
+      setTimeout(() => {
+        if (this.permanentWordElement) {
+          this.permanentWordElement.className = 'word-text';
+        }
+        this.isSpinning = false;
+      }, 3000);
+    };
     if (inner) {
-      inner.textContent = finalWord;
-      // Do not add 'final' class to avoid yellow highlight in live view
+      doFinish();
     }
-    this.permanentWordElement.className = 'word-text';
-    this.autoFitWordBanner();
-    
-    // Keep the final effect for a bit, then return to normal
-    setTimeout(() => {
-      if (this.permanentWordElement) {
-        this.permanentWordElement.className = 'word-text';
-      }
-      this.isSpinning = false;
-    }, 3000);
+  }
+
+  // Subtle pre-spin vibration on the inner text to anticipate the draw
+  _preSpinShake(durationMs = 900) {
+    return new Promise((resolve) => {
+      const inner = this.permanentWordElement && this.permanentWordElement.querySelector('.word-inner');
+      if (!inner) return resolve();
+      const start = performance.now();
+      const originalTransition = inner.style.transition;
+      const originalFilter = inner.style.filter;
+      const originalTransform = inner.style.transform;
+      // We'll only affect the inner element so we don't conflict with banner positioning
+      const tick = (now) => {
+        const t = now - start;
+        const done = t >= durationMs;
+        // small oscillation: vertical jiggle + tiny rotation
+        const phase = t / 1000 * 8 * Math.PI; // ~4 cycles/sec
+        const dy = Math.sin(phase) * 2;       // +/- 2px
+        const rot = Math.sin(phase * 0.8) * 0.8; // +/- 0.8deg
+        inner.style.transition = 'transform 50ms linear';
+        inner.style.transform = `translateY(${dy}px) rotate(${rot}deg)`;
+        if (!done) {
+          requestAnimationFrame(tick);
+        } else {
+          // Reset styles
+          inner.style.transition = originalTransition;
+          inner.style.transform = originalTransform || '';
+          inner.style.filter = originalFilter || '';
+          resolve();
+        }
+      };
+      requestAnimationFrame(tick);
+    });
+  }
+
+  // Smooth scroll/slot-machine effect with blur between words
+  _animateScrollTo(nextWord, stepMs = 260) {
+    return new Promise((resolve) => {
+      const container = this.permanentWordElement;
+      const inner = container && container.querySelector('.word-inner');
+      if (!container || !inner) return resolve();
+
+      // Capture computed typography so incoming element matches exactly
+      const cs = window.getComputedStyle(inner);
+
+      // Prepare current element (inner) to move up
+      const prevPos = {
+        position: inner.style.position,
+        left: inner.style.left,
+        top: inner.style.top,
+        transform: inner.style.transform,
+        transition: inner.style.transition,
+        filter: inner.style.filter,
+        opacity: inner.style.opacity
+      };
+
+      // Ensure absolute positioning centered
+      inner.style.position = 'absolute';
+      inner.style.left = '50%';
+      inner.style.top = '50%';
+      inner.style.transform = 'translate(-50%, 0%)';
+      inner.style.transition = `transform ${stepMs}ms ease, filter ${stepMs}ms ease, opacity ${stepMs}ms ease`;
+      inner.style.willChange = 'transform, filter, opacity';
+
+      // Create incoming element with next word, starting from below
+      const incoming = document.createElement('span');
+      incoming.className = 'dg-slot';
+      incoming.textContent = nextWord;
+      incoming.style.position = 'absolute';
+      incoming.style.left = '50%';
+      incoming.style.top = '50%';
+      incoming.style.transform = 'translate(-50%, 100%)';
+      incoming.style.transition = `transform ${stepMs}ms ease, filter ${stepMs}ms ease, opacity ${stepMs}ms ease`;
+      incoming.style.willChange = 'transform, filter, opacity';
+      incoming.style.filter = 'blur(4px)';
+      incoming.style.opacity = '0.65';
+      incoming.style.pointerEvents = 'none';
+  // Match typography from inner so both words render identically
+  incoming.style.fontFamily = cs.fontFamily;
+  incoming.style.fontSize = cs.fontSize;
+  incoming.style.fontWeight = cs.fontWeight;
+  incoming.style.letterSpacing = cs.letterSpacing;
+  incoming.style.lineHeight = cs.lineHeight;
+      container.appendChild(incoming);
+
+      // Kick off the animation on the next frame
+      requestAnimationFrame(() => {
+        // Move current (inner) up and blur/fade a bit
+        inner.style.transform = 'translate(-50%, -100%)';
+        inner.style.filter = 'blur(3px)';
+        inner.style.opacity = '0.5';
+
+        // Move incoming into place and sharpen
+        incoming.style.transform = 'translate(-50%, 0%)';
+        incoming.style.filter = 'blur(0px)';
+        incoming.style.opacity = '1';
+
+        const cleanup = () => {
+          // Set the inner to the new word and restore its original styling
+          inner.textContent = nextWord;
+          // Re-fit text so the prompt and drawn words share the same size
+          try { this.autoFitWordBanner(); } catch (_) {}
+          inner.style.position = prevPos.position || '';
+          inner.style.left = prevPos.left || '';
+          inner.style.top = prevPos.top || '';
+          inner.style.transform = prevPos.transform || '';
+          inner.style.transition = prevPos.transition || '';
+          inner.style.filter = prevPos.filter || '';
+          inner.style.opacity = prevPos.opacity || '';
+
+          // Remove the incoming temp element
+          if (incoming && incoming.parentNode) incoming.parentNode.removeChild(incoming);
+          resolve();
+        };
+
+        // Fallback timeout in case transitionend doesn't fire
+        const to = setTimeout(cleanup, stepMs + 40);
+        incoming.addEventListener('transitionend', () => {
+          clearTimeout(to);
+          cleanup();
+        }, { once: true });
+      });
+    });
   }
 
   // Auto-fit logic: shrink font-size inside fixed banner until it fits height & width

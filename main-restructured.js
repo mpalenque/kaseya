@@ -108,6 +108,14 @@ class KaseyaApp {
     // Initialize Sphere Game (after videoCapture so we can pass it)
     this.sphereGame = new SphereGame();
     await this.sphereGame.init(this.faceTracker, this.videoCapture);
+    // Share THREE components with FaceTracker so draw-game rings render in the active scene
+    try {
+      if (this.sphereGame.scene && this.sphereGame.camera && this.sphereGame.renderer && this.faceTracker?.setThreeComponents) {
+        this.faceTracker.setThreeComponents(this.sphereGame.scene, this.sphereGame.camera, this.sphereGame.renderer);
+      }
+    } catch (e) {
+      console.warn('Failed to connect FaceTracker to THREE components:', e);
+    }
     
     // Connect sphereGame to videoCapture
     this.videoCapture.sphereGame = this.sphereGame;
