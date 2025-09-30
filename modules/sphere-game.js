@@ -29,8 +29,8 @@ class SphereGame {
   this.faceCollisionExtra = 0.035; // extra radial clearance so the sphere volume never intersects
   // Face box debug/collider scales (relative to radius)
   // Defaults changed to larger, user-tunable values (units are multipliers applied to face radius)
-  this.faceBoxScaleX = 100; // width multiplier (default requested)
-  this.faceBoxScaleY = 170; // height multiplier (default requested)
+  this.faceBoxScaleX = 200; // width multiplier (requested)
+  this.faceBoxScaleY = 200; // height multiplier (requested)
   this.faceBoxScaleZ = 1.0; // depth multiplier
   // Debug box visibility (collision still works even if hidden)
   this.showFaceDebug = false;
