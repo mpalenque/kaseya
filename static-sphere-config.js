@@ -17,7 +17,7 @@ window.STATIC_SPHERE_CONFIG = {
     { "id": 10, "position": { "x": -0.94, "y": 1.05, "z": 3.07 }, "radius": 0.25, "baseRadius": 3.38, "color": "#00FFFF" },
     { "id": 11, "position": { "x": 1.19, "y": 1.08, "z": 3.07 }, "radius": 0.23, "baseRadius": 3.47, "color": "#B794F4" },
     { "id": 12, "position": { "x": -0.86, "y": 0.06, "z": 3.07 }, "radius": 0.15, "baseRadius": 3.19, "color": "#7209B7" },
-    { "id": 13, "position": { "x": 1.25, "y": -0.13, "z": 3.07 }, "radius": 0.15, "baseRadius": 3.32, "color": "#3D348B" },
+  { "id": 13, "position": { "x": 1.25, "y": -0.13, "z": 3.07 }, "radius": 0.15, "baseRadius": 3.32, "color": "#26147A" },
     { "id": 14, "position": { "x": 0.57, "y": 1.27, "z": 3.07 }, "radius": 0.05, "baseRadius": 3.37, "color": "#36E5FF" },
     { "id": 15, "position": { "x": -1.16, "y": 0.22, "z": 3.07 }, "radius": 0.06, "baseRadius": 3.29, "color": "#C77DFF" },
     { "id": 16, "position": { "x": -0.73, "y": 0.26, "z": 3.07 }, "radius": 0.05, "baseRadius": 3.17, "color": "#A45CFF" },
