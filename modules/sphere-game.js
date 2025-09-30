@@ -55,6 +55,9 @@ class SphereGame {
     // Container element
     this.sphereContainer = null;
     this.spheresGroup = null;
+    // Bring all spheres 10% closer to the face center (applied in update)
+    // 1.0 = no change, 0.9 = 10% closer relative to face center each frame
+    this.SPHERES_CLOSENESS_FACTOR = 0.9;
   }
 
   async init(faceTracker, videoCapture = null) {
@@ -262,7 +265,8 @@ class SphereGame {
     // Make sure renderer is ready (recover if WebGL context was lost)
     this.ensureRendererReady();
     
-    // Occlusion setup removed per request
+  // Ensure occlusion is disabled in sphere mode; UI manager also enforces this
+  try { this.faceTracker?.setOccluderEnabled && this.faceTracker.setOccluderEnabled(false); } catch(_) {}
     
     // Wait for THREE.js and scene to be ready
     if (this.scene && this.renderer && this.clock) {
@@ -762,6 +766,18 @@ class SphereGame {
         // Fallback to original behavior if no base position configured
         this.tmp.set(ox + headPosSmoothed.x, oy + headPosSmoothed.y, facePlaneZ);
       }
+
+      // Bring sphere position 10% closer to face center in XY plane
+      try {
+        const cx = faceColliderCenter.x;
+        const cy = faceColliderCenter.y;
+        const f = this.SPHERES_CLOSENESS_FACTOR;
+        if (typeof f === 'number' && f > 0 && f < 1) {
+          this.tmp.x = cx + (this.tmp.x - cx) * f;
+          this.tmp.y = cy + (this.tmp.y - cy) * f;
+          // Z stays locked to facePlaneZ already
+        }
+      } catch(_) {}
       
       // Face OBB collision detection (rotate into face local space if available)
       const desiredX = this.tmp.x;

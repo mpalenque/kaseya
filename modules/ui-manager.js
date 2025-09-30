@@ -123,6 +123,13 @@ class UIManager {
       // Update word position for the current mode
       this.drawGame.updateWordPositionForMode(mode === 'draw');
     }
+
+    // Enable occlusion mask only in draw mode; disable for spheres/none
+    try {
+      if (this.faceTracker && typeof this.faceTracker.setOccluderEnabled === 'function') {
+        this.faceTracker.setOccluderEnabled(mode === 'draw');
+      }
+    } catch(e) {}
     
     // Handle sphere mode
     if (mode === 'spheres') {
