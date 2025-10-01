@@ -222,7 +222,7 @@ function createSphereEditor() {
                 
                 <div style="display: grid; grid-template-columns: 20px 1fr 50px; gap: 6px; align-items: center;">
                     <label style="color: #f7b731; font-weight: 600;">R:</label>
-                    <input type="range" min="0.05" max="0.5" step="0.01" value="${radius.toFixed(2)}"
+                    <input type="range" min="0.03" max="0.5" step="0.01" value="${radius.toFixed(2)}"
                            data-sphere="${index}" data-prop="radius" class="radius-slider"
                            style="width: 100%;">
                     <span class="value-display" data-sphere="${index}" data-prop="radius">${radius.toFixed(2)}</span>

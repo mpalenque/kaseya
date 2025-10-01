@@ -29,8 +29,8 @@ class SphereGame {
   this.faceCollisionExtra = 0.035; // extra radial clearance so the sphere volume never intersects
   // Face box debug/collider scales (relative to radius)
   // Defaults changed to larger, user-tunable values (units are multipliers applied to face radius)
-  this.faceBoxScaleX = 160; // width multiplier (requested ~160)
-  this.faceBoxScaleY = 210; // height multiplier (requested ~210)
+  this.faceBoxScaleX = 112; // width multiplier (requested 112)
+  this.faceBoxScaleY = 210; // height multiplier (requested 210)
   this.faceBoxScaleZ = 1.0; // depth multiplier
   // Debug box visibility (collision still works even if hidden)
   this.showFaceDebug = false;
@@ -795,20 +795,18 @@ class SphereGame {
         this.tmp.set(ox + headPosSmoothed.x, oy + headPosSmoothed.y, facePlaneZ);
       }
 
-      // Bring sphere position 10% closer to face center in XY plane
-      // Skip this attraction when displaced or within repel cooldown to avoid pulling into the face box
+      // REMOVED: No longer pull toward face center. Spheres must orbit and return
+      // to their static basePosition, NOT seek the face center.
+      // Skip closeness attraction entirely—only apply side Y-compression for visibility.
       try {
         const repelUntil = sphere.userData.repelUntil || 0;
         const isRepelled = now < repelUntil || sphere.userData.isDisplaced;
         if (!isRepelled) {
           const cx = faceColliderCenter.x;
           const cy = faceColliderCenter.y;
-          const f = this.SPHERES_CLOSENESS_FACTOR;
-          if (typeof f === 'number' && f > 0 && f < 1) {
-            this.tmp.x = cx + (this.tmp.x - cx) * f;
-            this.tmp.y = cy + (this.tmp.y - cy) * f;
-            // Z stays locked to facePlaneZ already
-          }
+          // REMOVED: SPHERES_CLOSENESS_FACTOR pull to center (was lines 807-813)
+          // Spheres stay at their orbital position around basePosition.
+          
           // Additional Y compression for spheres far on X (sides) to keep them visible
           const start = this.SIDE_Y_COMPRESS_START ?? 1.6;
           const maxScale = this.SIDE_Y_COMPRESS_MAX ?? 0.7;
@@ -847,17 +845,17 @@ class SphereGame {
             targetLocal.x += jitter.jx;
           }
           const worldTarget = targetLocal.applyQuaternion(faceQuat).add(new THREE.Vector3(faceColliderCenter.x, faceColliderCenter.y, 0));
-          const resolveAlpha = 0.06;
+          const resolveAlpha = 0.03; // reduced from 0.06 for smoother push-back
           this.tmp.x = desiredX + (worldTarget.x - desiredX) * resolveAlpha;
           this.tmp.y = desiredY + (worldTarget.y - desiredY) * resolveAlpha;
           this.tmp.z = facePlaneZ;
           const mem = sphere.userData.displacedPosition;
-          mem.x = mem.x + (this.tmp.x - mem.x) * 0.06;
-          mem.y = mem.y + (this.tmp.y - mem.y) * 0.06;
+          mem.x = mem.x + (this.tmp.x - mem.x) * 0.03; // reduced from 0.06 for smoother transition
+          mem.y = mem.y + (this.tmp.y - mem.y) * 0.03;
           mem.z = facePlaneZ;
           // Anchor to boundary and extend repel cooldown to prevent immediate re-entry
           sphere.userData.lastBoundary = { x: worldTarget.x, y: worldTarget.y, z: facePlaneZ };
-          const until = performance.now() + 600;
+          const until = performance.now() + 400; // reduced from 600ms for faster return
           sphere.userData.repelUntil = Math.max(sphere.userData.repelUntil || 0, until);
           collidedThisFrame = true;
         }
@@ -888,17 +886,17 @@ class SphereGame {
           else if (minDist === distToRight) { targetX = boxRight + sphereRadius + margin; targetY += jitter.jy; }
           if (minDist === distToTop) { targetY = boxTop + sphereRadius + margin; targetX += jitter.jx; }
           else if (minDist === distToBottom) { targetY = boxBottom - sphereRadius - margin; targetX += jitter.jx; }
-          const resolveAlpha = 0.06;
+          const resolveAlpha = 0.03; // reduced from 0.06 for smoother push-back
           this.tmp.x = desiredX + (targetX - desiredX) * resolveAlpha;
           this.tmp.y = desiredY + (targetY - desiredY) * resolveAlpha;
           this.tmp.z = facePlaneZ;
           const mem = sphere.userData.displacedPosition;
-          mem.x = mem.x + (this.tmp.x - mem.x) * 0.06;
-          mem.y = mem.y + (this.tmp.y - mem.y) * 0.06;
+          mem.x = mem.x + (this.tmp.x - mem.x) * 0.03; // reduced from 0.06 for smoother transition
+          mem.y = mem.y + (this.tmp.y - mem.y) * 0.03;
           mem.z = facePlaneZ;
           // Anchor to boundary and extend repel cooldown to prevent immediate re-entry
           sphere.userData.lastBoundary = { x: targetX, y: targetY, z: facePlaneZ };
-          const until = performance.now() + 600;
+          const until = performance.now() + 400; // reduced from 600ms for faster return
           sphere.userData.repelUntil = Math.max(sphere.userData.repelUntil || 0, until);
           collidedThisFrame = true;
         }
@@ -931,6 +929,21 @@ class SphereGame {
           // regular lerp logic picks it up and the visible sphere moves slowly back.
           this.tmp.x = mem.x + ox * 0.3;
           this.tmp.y = mem.y + oy * 0.3;
+          // Add a small, decaying per-sphere wobble during the return so spheres don't align
+          // on the same X/Y lines. This does not change the final base position.
+          const elapsed = (now - (sphere.userData.displacedAt || now)) * 0.001; // seconds
+          const wobbleDuration = 1.2; // seconds until fully gone
+          if (elapsed >= 0 && elapsed < wobbleDuration) {
+            const k = 1 - (elapsed / wobbleDuration);
+            const amp = 0.024 * k; // max ~2.4cm in world units, decays to 0
+            const sid = sphere.userData.id ?? 0;
+            const f1 = 3.3 + (sid % 5) * 0.41;
+            const f2 = 4.1 + (sid % 7) * 0.37;
+            const ph1 = sid * 0.92 + 0.37;
+            const ph2 = sid * 1.23 + 1.11;
+            this.tmp.x += amp * Math.sin(ph1 + elapsed * f1);
+            this.tmp.y += amp * Math.cos(ph2 + elapsed * f2);
+          }
           this.tmp.z = facePlaneZ;
 
           // If the displaced memory is very close to base, clear the displaced flag
@@ -956,12 +969,12 @@ class SphereGame {
       const prevX = sphere.position.x;
       const prevY = sphere.position.y;
   // If displaced, blend much slower for extra smoothness
-  const alphaAdjusted = (sphere.userData.isDisplaced ? Math.min(alpha * 1.8, 0.18) : alpha);
+  const alphaAdjusted = (sphere.userData.isDisplaced ? Math.min(alpha * 1.5, 0.12) : alpha);
   sphere.position.lerp(this.tmp, alphaAdjusted);
-      // Gentle damping post-collision to reduce jitter/violence
+      // Gentle damping post-collision to reduce jitter/violence - increased smoothing
       if (collidedThisFrame) {
-        sphere.position.x = prevX + (sphere.position.x - prevX) * 0.85;
-        sphere.position.y = prevY + (sphere.position.y - prevY) * 0.85;
+        sphere.position.x = prevX + (sphere.position.x - prevX) * 0.65; // reduced from 0.85 for softer bounce
+        sphere.position.y = prevY + (sphere.position.y - prevY) * 0.65;
       }
   // Ensure Z stays locked exactly on the plane after interpolation
   sphere.position.z = facePlaneZ;
@@ -1292,6 +1305,11 @@ class SphereGame {
         e.preventDefault();
         this.toggleConfigPanel();
       }
+      // Toggle face box collider debug with 'b'
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'b' || e.key === 'B')) {
+        this.showFaceDebug = !this.showFaceDebug;
+        if (this.faceDebugCube) this.faceDebugCube.visible = this.showFaceDebug;
+      }
     });
   }
 
@@ -1337,30 +1355,30 @@ class SphereGame {
   getEmbeddedConfig() {
     return {
       "spheres": [
-        { "id": 0, "position": { "x": -0.88, "y": -0.62, "z": 3.07 }, "radius": 0.14, "baseRadius": 3.25, "color": "#5E2EA7" },
-        { "id": 1, "position": { "x": 0.37, "y": 0.99, "z": 3.07 }, "radius": 0.06, "baseRadius": 3.25, "color": "#00FFFF" },
-        { "id": 2, "position": { "x": 0.38, "y": -1.41, "z": 3.07 }, "radius": 0.26, "baseRadius": 3.4, "color": "#3D348B" },
-        { "id": 3, "position": { "x": 0.78, "y": 1.04, "z": 3.07 }, "radius": 0.15, "baseRadius": 3.34, "color": "#7209B7" },
-        { "id": 4, "position": { "x": 1.01, "y": -1.41, "z": 3.07 }, "radius": 0.34, "baseRadius": 3.53, "color": "#7209B7" },
-        { "id": 5, "position": { "x": -0.73, "y": -0.43, "z": 3.07 }, "radius": 0.05, "baseRadius": 3.19, "color": "#26147A" },
-        { "id": 6, "position": { "x": -0.46, "y": 0.9, "z": 3.07 }, "radius": 0.14, "baseRadius": 3.23, "color": "#8A2BE2" },
-        { "id": 7, "position": { "x": -0.31, "y": -1.43, "z": 3.07 }, "radius": 0.4, "baseRadius": 3.4, "color": "#B794F4" },
-        { "id": 8, "position": { "x": 1.17, "y": -0.48, "z": 3.07 }, "radius": 0.05, "baseRadius": 3.32, "color": "#B794F4" },
-        { "id": 9, "position": { "x": 1.57, "y": -0.58, "z": 3.07 }, "radius": 0.05, "baseRadius": 3.5, "color": "#B794F4" },
-        { "id": 10, "position": { "x": -0.94, "y": 1.05, "z": 3.07 }, "radius": 0.25, "baseRadius": 3.38, "color": "#00FFFF" },
-        { "id": 11, "position": { "x": 1.19, "y": 1.08, "z": 3.07 }, "radius": 0.23, "baseRadius": 3.47, "color": "#B794F4" },
-        { "id": 12, "position": { "x": -0.86, "y": 0.06, "z": 3.07 }, "radius": 0.15, "baseRadius": 3.19, "color": "#7209B7" },
-  { "id": 13, "position": { "x": 1.25, "y": -0.13, "z": 3.07 }, "radius": 0.15, "baseRadius": 3.32, "color": "#26147A" },
-        { "id": 14, "position": { "x": 0.57, "y": 1.27, "z": 3.07 }, "radius": 0.05, "baseRadius": 3.37, "color": "#36E5FF" },
-        { "id": 15, "position": { "x": -1.16, "y": 0.22, "z": 3.07 }, "radius": 0.06, "baseRadius": 3.29, "color": "#C77DFF" },
-        { "id": 16, "position": { "x": -0.73, "y": 0.26, "z": 3.07 }, "radius": 0.05, "baseRadius": 3.17, "color": "#A45CFF" },
-        { "id": 17, "position": { "x": -2.01, "y": -1.21, "z": 3.07 }, "radius": 0.15, "baseRadius": 3.87, "color": "#C77DFF" },
-        { "id": 18, "position": { "x": -2.43, "y": 0.52, "z": 3.07 }, "radius": 0.15, "baseRadius": 3.95, "color": "#C77DFF" },
-        { "id": 19, "position": { "x": -0.68, "y": 0.84, "z": 3.07 }, "radius": 0.05, "baseRadius": 3.25, "color": "#00FFFF" },
-        { "id": 20, "position": { "x": -1.26, "y": 0.72, "z": 3.07 }, "radius": 0.17, "baseRadius": 3.4, "color": "#8A2BE2" },
-        { "id": 21, "position": { "x": -0.03, "y": 1.17, "z": 3.07 }, "radius": 0.27, "baseRadius": 3.29, "color": "#26147A" }
+        { "id": 0, "position": { "x": -0.88, "y": -0.69, "z": 3.07 }, "radius": 0.14, "baseRadius": 3.27, "color": "#5E2EA7" },
+        { "id": 1, "position": { "x": 0.26, "y": 0.71, "z": 3.07 }, "radius": 0.06, "baseRadius": 3.16, "color": "#00FFFF" },
+        { "id": 2, "position": { "x": 0.04, "y": -1.22, "z": 3.07 }, "radius": 0.26, "baseRadius": 3.3, "color": "#3D348B" },
+        { "id": 3, "position": { "x": 0.58, "y": 0.81, "z": 3.07 }, "radius": 0.15, "baseRadius": 3.23, "color": "#7209B7" },
+        { "id": 4, "position": { "x": 0.62, "y": -0.55, "z": 3.07 }, "radius": 0.06, "baseRadius": 3.18, "color": "#7209B7" },
+        { "id": 5, "position": { "x": -0.65, "y": -0.5, "z": 3.07 }, "radius": 0.03, "baseRadius": 3.18, "color": "#26147A" },
+        { "id": 6, "position": { "x": -0.42, "y": 0.83, "z": 3.07 }, "radius": 0.14, "baseRadius": 3.21, "color": "#8A2BE2" },
+        { "id": 7, "position": { "x": -1.81, "y": -0.61, "z": 3.07 }, "radius": 0.05, "baseRadius": 3.61, "color": "#B794F4" },
+        { "id": 8, "position": { "x": 0.75, "y": -0.36, "z": 3.07 }, "radius": 0.03, "baseRadius": 3.18, "color": "#B794F4" },
+        { "id": 9, "position": { "x": 1.05, "y": -0.51, "z": 3.07 }, "radius": 0.03, "baseRadius": 3.28, "color": "#B794F4" },
+        { "id": 10, "position": { "x": -0.91, "y": 0.89, "z": 3.07 }, "radius": 0.21, "baseRadius": 3.32, "color": "#00FFFF" },
+        { "id": 11, "position": { "x": 1.03, "y": 0.58, "z": 3.07 }, "radius": 0.23, "baseRadius": 3.29, "color": "#B794F4" },
+        { "id": 12, "position": { "x": -0.82, "y": -0.07, "z": 3.07 }, "radius": 0.15, "baseRadius": 3.18, "color": "#00FFFF" },
+        { "id": 13, "position": { "x": 0.48, "y": 0.12, "z": 3.07 }, "radius": 0.15, "baseRadius": 3.11, "color": "#26147A" },
+        { "id": 14, "position": { "x": 0.38, "y": 1.05, "z": 3.07 }, "radius": 0.03, "baseRadius": 3.26, "color": "#36E5FF" },
+        { "id": 15, "position": { "x": -1.1, "y": 0.15, "z": 3.07 }, "radius": 0.06, "baseRadius": 3.26, "color": "#C77DFF" },
+        { "id": 16, "position": { "x": -0.57, "y": 0.65, "z": 3.07 }, "radius": 0.03, "baseRadius": 3.19, "color": "#A45CFF" },
+        { "id": 17, "position": { "x": -1.78, "y": -1.04, "z": 3.07 }, "radius": 0.15, "baseRadius": 3.7, "color": "#C77DFF" },
+        { "id": 18, "position": { "x": -2.06, "y": 0.34, "z": 3.07 }, "radius": 0.15, "baseRadius": 3.71, "color": "#C77DFF" },
+        { "id": 19, "position": { "x": -0.73, "y": 0.53, "z": 3.07 }, "radius": 0.03, "baseRadius": 3.2, "color": "#00FFFF" },
+        { "id": 20, "position": { "x": -1.27, "y": 0.48, "z": 3.07 }, "radius": 0.17, "baseRadius": 3.35, "color": "#26147A" },
+        { "id": 21, "position": { "x": 0, "y": 1.02, "z": 3.07 }, "radius": 0.23, "baseRadius": 3.23, "color": "#26147A" }
       ],
-      "timestamp": 1759269817551
+      "timestamp": 1759322578242
     };
   }
 
@@ -1556,7 +1574,7 @@ class SphereGame {
           <input type="range" min="-8" max="12" step="0.05" value="${config.position.z.toFixed(2)}" 
                  data-sphere="${index}" data-axis="z" class="sphere-pos-slider"
                  style="width: 100%; height: 14px; background: rgba(0,0,255,0.3); border-radius: 7px; outline: none; -webkit-appearance: none;">
-          <input type="range" min="0.02" max="0.4" step="0.01" value="${config.radius.toFixed(2)}" 
+          <input type="range" min="0.03" max="0.4" step="0.01" value="${config.radius.toFixed(2)}" 
                  data-sphere="${index}" data-prop="radius" class="sphere-radius-slider"
                  style="width: 100%; height: 14px; background: rgba(255,255,0,0.3); border-radius: 7px; outline: none; -webkit-appearance: none;">
         </div>
@@ -1815,6 +1833,21 @@ class SphereGame {
   normalizeConfigColors() {
     try {
       if (!this.sphereConfigs || !Array.isArray(this.sphereConfigs.spheres)) return;
+      // New rule (user): make sphere 21 the same color as 22
+      // Handle both numbering interpretations:
+      // - 0-based ids (if an id 22 exists): set id 21 to id 22
+      // - 1-based wording (21->22): map id 20 to id 21 as a practical fallback
+      const s21_0based = this.sphereConfigs.spheres.find(s => s.id === 21);
+      const s22_0based = this.sphereConfigs.spheres.find(s => s.id === 22);
+      if (s21_0based && s22_0based && s22_0based.color && s21_0based.color !== s22_0based.color) {
+        console.log('[SphereGame] Normalizing colors: setting sphere id 21 color to match id 22:', s22_0based.color);
+        s21_0based.color = s22_0based.color;
+      }
+      const s20_0based = this.sphereConfigs.spheres.find(s => s.id === 20);
+      if (s20_0based && s21_0based && s21_0based.color && s20_0based.color !== s21_0based.color) {
+        console.log('[SphereGame] Normalizing colors: setting sphere id 20 (1-based #21) color to match id 21 (1-based #22):', s21_0based.color);
+        s20_0based.color = s21_0based.color;
+      }
       const s9 = this.sphereConfigs.spheres.find(s => s.id === 9);
       const s11 = this.sphereConfigs.spheres.find(s => s.id === 11);
       if (s9 && s11 && s11.color && s9.color !== s11.color) {
@@ -1828,6 +1861,13 @@ class SphereGame {
       if (s8 && s7 && s7.color && s8.color !== s7.color) {
         console.log('[SphereGame] Normalizing colors: setting sphere 8 color to match sphere 7:', s7.color);
         s8.color = s7.color;
+      }
+
+      // Enforce: sphere 12 must be cyan (#00FFFF)
+      const s12 = this.sphereConfigs.spheres.find(s => s.id === 12);
+      if (s12 && s12.color !== '#00FFFF') {
+        console.log('[SphereGame] Normalizing colors: forcing sphere 12 color to cyan (#00FFFF)');
+        s12.color = '#00FFFF';
       }
 
       // New rule: sphere 13 color must equal sphere 21 color
