@@ -32,6 +32,7 @@ class SphereGame {
   this.faceBoxScaleX = 112; // width multiplier (requested 112)
   this.faceBoxScaleY = 210; // height multiplier (requested 210)
   this.faceBoxScaleZ = 1.0; // depth multiplier
+  this.faceBoxOffsetY = 0.1; // shift box up 10% in world units (positive = up)
   // Debug box visibility (collision still works even if hidden)
   this.showFaceDebug = false;
     this.tmp = null;
@@ -721,6 +722,9 @@ class SphereGame {
     const faceColliderMargin = headData.colliderMargin;
     // Lock all spheres to the face mesh Z plane
   const facePlaneZ = faceColliderCenter.z + (this.facePlaneOffsetZ || 0); // slight offset towards camera
+  
+  // Apply Y offset to raise the face box collider
+  const faceColliderCenterY = faceColliderCenter.y + (this.faceBoxOffsetY || 0);
 
   // Face orientation quaternion (corrected) and its inverse for OBB tests
   let faceQuat = null;
@@ -803,7 +807,7 @@ class SphereGame {
         const isRepelled = now < repelUntil || sphere.userData.isDisplaced;
         if (!isRepelled) {
           const cx = faceColliderCenter.x;
-          const cy = faceColliderCenter.y;
+          const cy = faceColliderCenterY; // use adjusted Y with offset
           // REMOVED: SPHERES_CLOSENESS_FACTOR pull to center (was lines 807-813)
           // Spheres stay at their orbital position around basePosition.
           
@@ -825,7 +829,7 @@ class SphereGame {
       const sphereRadius = sphere.userData.radius;
       let hitFace = false;
       if (faceQuat && invFaceQuat) {
-        const local = new THREE.Vector3(desiredX - faceColliderCenter.x, desiredY - faceColliderCenter.y, 0).applyQuaternion(invFaceQuat);
+        const local = new THREE.Vector3(desiredX - faceColliderCenter.x, desiredY - faceColliderCenterY, 0).applyQuaternion(invFaceQuat);
         const inX = (local.x > -hx - sphereRadius) && (local.x < hx + sphereRadius);
         const inY = (local.y > -hy - sphereRadius) && (local.y < hy + sphereRadius);
         hitFace = inX && inY;
@@ -844,7 +848,7 @@ class SphereGame {
             targetLocal.y = (local.y >= 0 ? hy + sphereRadius + margin : -hy - sphereRadius - margin);
             targetLocal.x += jitter.jx;
           }
-          const worldTarget = targetLocal.applyQuaternion(faceQuat).add(new THREE.Vector3(faceColliderCenter.x, faceColliderCenter.y, 0));
+          const worldTarget = targetLocal.applyQuaternion(faceQuat).add(new THREE.Vector3(faceColliderCenter.x, faceColliderCenterY, 0));
           const resolveAlpha = 0.03; // reduced from 0.06 for smoother push-back
           this.tmp.x = desiredX + (worldTarget.x - desiredX) * resolveAlpha;
           this.tmp.y = desiredY + (worldTarget.y - desiredY) * resolveAlpha;
@@ -863,8 +867,8 @@ class SphereGame {
         // Fallback: axis-aligned box
         const boxLeft = faceColliderCenter.x - hx;
         const boxRight = faceColliderCenter.x + hx;
-        const boxTop = faceColliderCenter.y + hy;
-        const boxBottom = faceColliderCenter.y - hy;
+        const boxTop = faceColliderCenterY + hy;
+        const boxBottom = faceColliderCenterY - hy;
         const sphereLeft = desiredX - sphereRadius;
         const sphereRight = desiredX + sphereRadius;
         const sphereTop = desiredY + sphereRadius;
@@ -985,7 +989,7 @@ class SphereGame {
       // Make the cube bigger in X and Y to match face dimensions, not just a circle
       const faceBoxWidth = (faceColliderRadius * this.faceOccluderInflate * this.faceBoxScaleX) + faceColliderMargin + this.faceColliderExtraMargin + (this.faceCollisionExtra || 0);
       const faceBoxHeight = (faceColliderRadius * this.faceOccluderInflate * this.faceBoxScaleY) + faceColliderMargin + this.faceColliderExtraMargin + (this.faceCollisionExtra || 0); // Taller for face shape
-      this.faceDebugCube.position.set(faceColliderCenter.x, faceColliderCenter.y, facePlaneZ);
+      this.faceDebugCube.position.set(faceColliderCenter.x, faceColliderCenterY, facePlaneZ);
   const depth = (this.meshZThick || 0.12) * (this.faceBoxScaleZ || 1.0);
   this.faceDebugCube.scale.set(faceBoxWidth, faceBoxHeight, depth);
   this.faceDebugCube.visible = this.showFaceDebug;
@@ -1128,7 +1132,7 @@ class SphereGame {
     for (const sphere of this.followers) {
       const sphereRadius = sphere.userData.radius;
       if (faceQuat && invFaceQuat) {
-        const local = new THREE.Vector3(sphere.position.x - faceColliderCenter.x, sphere.position.y - faceColliderCenter.y, 0).applyQuaternion(invFaceQuat);
+        const local = new THREE.Vector3(sphere.position.x - faceColliderCenter.x, sphere.position.y - faceColliderCenterY, 0).applyQuaternion(invFaceQuat);
         const inX = (local.x > -hx - sphereRadius) && (local.x < hx + sphereRadius);
         const inY = (local.y > -hy - sphereRadius) && (local.y < hy + sphereRadius);
         if (inX && inY) {
@@ -1143,7 +1147,7 @@ class SphereGame {
             local.y = (local.y >= 0 ? hy + sphereRadius + margin : -hy - sphereRadius - margin);
             local.x += jitter.jx;
           }
-          const world = local.applyQuaternion(faceQuat).add(new THREE.Vector3(faceColliderCenter.x, faceColliderCenter.y, 0));
+          const world = local.applyQuaternion(faceQuat).add(new THREE.Vector3(faceColliderCenter.x, faceColliderCenterY, 0));
           // Hard clamp instantly outside the face OBB
           sphere.position.x = world.x;
           sphere.position.y = world.y;
@@ -1160,8 +1164,8 @@ class SphereGame {
       } else {
         const boxLeft = faceColliderCenter.x - hx;
         const boxRight = faceColliderCenter.x + hx;
-        const boxTop = faceColliderCenter.y + hy;
-        const boxBottom = faceColliderCenter.y - hy;
+        const boxTop = faceColliderCenterY + hy;
+        const boxBottom = faceColliderCenterY - hy;
         const inAABB = !( (sphere.position.x + sphereRadius) < boxLeft || (sphere.position.x - sphereRadius) > boxRight || (sphere.position.y - sphereRadius) > boxTop || (sphere.position.y + sphereRadius) < boxBottom );
         if (inAABB) {
           const distToLeft = Math.abs(sphere.position.x - boxLeft);
