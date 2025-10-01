@@ -707,8 +707,8 @@ body {
 .word-text {
   background: #2A127F;
   color: white;
-  width: 360px; /* increased from 320px */
-  height: 120px; /* increased from 100px */
+  width: 360px; /* base size for mobile */
+  height: 120px; /* base size for mobile */
   padding: 0;
   border-radius: 30px;
   font-weight: 700;
@@ -732,7 +732,7 @@ body {
   width: 100%;
   height: 100%;
   line-height: 1.15;
-  font-size: clamp(16px, 3.5vw, 28px); /* increased further from clamp(12px, 2.8vw, 24px) */
+  font-size: clamp(16px, 3.5vw, 28px); /* base size for mobile */
   font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-weight: 800;
   word-break: break-word;
@@ -742,6 +742,19 @@ body {
   justify-content: center;
   text-align: center;
   padding: 0 4px;
+}
+
+/* Desktop - larger banner with proportional text */
+@media screen and (min-width: 769px) {
+  .word-text {
+    width: 480px !important; /* 33% larger than mobile base */
+    height: 160px !important; /* 33% larger than mobile base */
+    border-radius: 40px;
+  }
+  .word-text .word-inner {
+    font-size: clamp(20px, 2.2vw, 32px) !important; /* proportional text for desktop */
+    line-height: 1.2;
+  }
 }
 
 .word-text.spinning {

@@ -131,9 +131,7 @@ class DrawGame {
     this.permanentWordElement.style.top = '16%';
     this.permanentWordElement.style.transform = 'translateX(-50%)';
     this.permanentWordElement.style.zIndex = '15';
-    // Make banner 35% smaller than before (380x130 -> ~247x85)
-    this.permanentWordElement.style.width = '247px';
-    this.permanentWordElement.style.height = '85px';
+    // Size controlled by CSS media queries for responsive design
     // Ensure content stays centered and anim-safe
     this.permanentWordElement.style.display = 'flex';
     this.permanentWordElement.style.alignItems = 'center';
